@@ -1,0 +1,21 @@
+package com.kellyacademy.model.enums;
+
+public enum PermisoSistema {
+
+    GESTIONAR_USUARIOS,
+
+    CREAR_CURSO,
+    EDITAR_CURSO,
+    ELIMINAR_CURSO,
+    VER_CURSOS,
+
+    CREAR_TAREA,
+    CALIFICAR_TAREA,
+    ENTREGAR_TAREA,
+
+    VER_CALIFICACIONES,
+
+    ENVIAR_MENSAJES,
+
+    GESTIONAR_BIBLIOTECA
+}

@@ -1,12 +1,16 @@
 package com.kellyacademy.config;
 
+import com.kellyacademy.model.enums.EstadoUsuario;
 import com.kellyacademy.model.enums.PermisoSistema;
 import com.kellyacademy.model.usuario.Permiso;
 import com.kellyacademy.model.usuario.Rol;
+import com.kellyacademy.model.usuario.Usuario;
 import com.kellyacademy.repository.PermisoRepository;
 import com.kellyacademy.repository.RolRepository;
+import com.kellyacademy.repository.UsuarioRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -19,19 +23,23 @@ public class DataSeeder {
 
     private final PermisoRepository permisoRepository;
     private final RolRepository rolRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final PasswordEncoder passwordEncoder;
+
 
     @PostConstruct
     public void inicializarDatos() {
 
-        if (rolRepository.count() > 0) {
-            return;
+        if (rolRepository.count() == 0) {
+
+            Set<Permiso> permisos = crearPermisos();
+
+            crearRolAdministrador(permisos);
+            crearRolDocente(permisos);
+            crearRolEstudiante(permisos);
         }
 
-        Set<Permiso> permisos = crearPermisos();
-
-        crearRolAdministrador(permisos);
-        crearRolDocente(permisos);
-        crearRolEstudiante(permisos);
+        crearAdministrador();
     }
 
     private Set<Permiso> crearPermisos() {
@@ -100,5 +108,38 @@ public class DataSeeder {
         );
 
         rolRepository.save(rol);
+    }
+
+    private void crearAdministrador() {
+
+        if (usuarioRepository.existsByCorreoElectronico(
+                "admin@kellyacademy.com"
+        )) {
+            return;
+        }
+
+        Rol rolAdministrador = rolRepository
+                .findByNombre("ADMINISTRADOR")
+                .orElseThrow();
+
+        Usuario usuario = new Usuario();
+
+        usuario.setNombre("Administrador");
+        usuario.setApellido("Sistema");
+        usuario.setCorreoElectronico("admin@kellyacademy.com");
+
+        usuario.setContrasena(
+                passwordEncoder.encode("Admin123*")
+        );
+
+        usuario.setEstado(
+                EstadoUsuario.ACTIVO
+        );
+
+        usuario.setRoles(
+                Set.of(rolAdministrador)
+        );
+
+        usuarioRepository.save(usuario);
     }
 }

@@ -1,6 +1,6 @@
-package com.kellyacademy.model.usuario;
+package com.kellyacademy.user.entity;
 
-import com.kellyacademy.model.base.BaseEntity;
+import com.kellyacademy.shared.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;

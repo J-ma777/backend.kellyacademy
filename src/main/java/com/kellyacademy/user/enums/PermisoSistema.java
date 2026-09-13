@@ -1,4 +1,4 @@
-package com.kellyacademy.model.enums;
+package com.kellyacademy.user.enums;
 
 public enum PermisoSistema {
 

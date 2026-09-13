@@ -1,8 +1,8 @@
 package com.kellyacademy.security.auth.service;
 
-import com.kellyacademy.model.usuario.Permiso;
-import com.kellyacademy.model.usuario.Rol;
-import com.kellyacademy.model.usuario.Usuario;
+import com.kellyacademy.user.entity.Permiso;
+import com.kellyacademy.user.entity.Rol;
+import com.kellyacademy.user.entity.Usuario;
 import com.kellyacademy.security.auth.dto.AuthRequest;
 import com.kellyacademy.security.auth.dto.AuthResponse;
 import com.kellyacademy.security.jwt.JwtService;

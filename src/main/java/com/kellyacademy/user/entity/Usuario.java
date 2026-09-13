@@ -1,7 +1,7 @@
-package com.kellyacademy.model.usuario;
+package com.kellyacademy.user.entity;
 
-import com.kellyacademy.model.base.BaseEntity;
-import com.kellyacademy.model.enums.EstadoUsuario;
+import com.kellyacademy.shared.base.BaseEntity;
+import com.kellyacademy.user.enums.EstadoUsuario;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

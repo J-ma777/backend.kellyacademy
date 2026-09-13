@@ -1,7 +1,7 @@
 package com.kellyacademy.security.user;
 
-import com.kellyacademy.model.usuario.Usuario;
-import com.kellyacademy.repository.UsuarioRepository;
+import com.kellyacademy.user.entity.Usuario;
+import com.kellyacademy.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

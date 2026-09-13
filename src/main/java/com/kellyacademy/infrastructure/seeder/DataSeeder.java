@@ -1,13 +1,13 @@
-package com.kellyacademy.config;
+package com.kellyacademy.infrastructure.seeder;
 
-import com.kellyacademy.model.enums.EstadoUsuario;
-import com.kellyacademy.model.enums.PermisoSistema;
-import com.kellyacademy.model.usuario.Permiso;
-import com.kellyacademy.model.usuario.Rol;
-import com.kellyacademy.model.usuario.Usuario;
-import com.kellyacademy.repository.PermisoRepository;
-import com.kellyacademy.repository.RolRepository;
-import com.kellyacademy.repository.UsuarioRepository;
+import com.kellyacademy.user.enums.EstadoUsuario;
+import com.kellyacademy.user.enums.PermisoSistema;
+import com.kellyacademy.user.entity.Permiso;
+import com.kellyacademy.user.entity.Rol;
+import com.kellyacademy.user.entity.Usuario;
+import com.kellyacademy.user.repository.PermisoRepository;
+import com.kellyacademy.user.repository.RolRepository;
+import com.kellyacademy.user.repository.UsuarioRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;

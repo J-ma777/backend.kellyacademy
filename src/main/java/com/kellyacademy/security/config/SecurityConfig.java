@@ -58,7 +58,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/auth/**", // Expone todos los endpoints de actuator
-                                "/actuator/health" // Solo health público
+                                "/actuator/health",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml"
                         )
                         .permitAll()
                         .anyRequest()

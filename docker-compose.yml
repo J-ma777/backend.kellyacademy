@@ -1,0 +1,63 @@
+# =========================================
+# KELLY ACADEMY LMS - Docker Compose
+# =========================================
+# Levanta: PostgreSQL 18 + pgAdmin 4
+# Uso:
+#   docker-compose up -d       (iniciar)
+#   docker-compose down        (detener)
+#   docker-compose down -v     (detener + borrar volumenes)
+# =========================================
+
+services:
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: kelly-academy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kelly_academy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - kelly-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kelly_academy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: kelly-academy-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@kellyacademy.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - kelly-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    name: kelly-academy-postgres-data
+  pgadmin_data:
+    name: kelly-academy-pgadmin-data
+
+networks:
+  kelly-network:
+    name: kelly-academy-network
+    driver: bridge

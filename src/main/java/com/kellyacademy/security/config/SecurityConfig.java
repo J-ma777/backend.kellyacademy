@@ -25,6 +25,8 @@ public class SecurityConfig {
     private final CustomUserDetailsService customUserDetailsService;
     private final PasswordEncoder passwordEncoder;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+    private final RestAccessDeniedHandler restAccessDeniedHandler;
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
@@ -51,11 +53,12 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
+                .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/auth/**",
-                                "/actuator/**"
+                                "/auth/**", // Expone todos los endpoints de actuator
+                                "/actuator/health" // Solo health público
                         )
                         .permitAll()
                         .anyRequest()
@@ -65,6 +68,10 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS
                         )
+                )
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(restAuthenticationEntryPoint)
+                        .accessDeniedHandler(restAccessDeniedHandler)
                 )
                 .addFilterBefore(
                         jwtAuthenticationFilter,

@@ -1,6 +1,6 @@
-package com.kellyacademy.repository;
+package com.kellyacademy.user.repository;
 
-import com.kellyacademy.model.usuario.Permiso;
+import com.kellyacademy.user.entity.Permiso;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

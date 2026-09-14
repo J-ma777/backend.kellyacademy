@@ -1,8 +1,9 @@
 package com.kellyacademy.security.user;
 
-import com.kellyacademy.model.usuario.Permiso;
-import com.kellyacademy.model.usuario.Rol;
-import com.kellyacademy.model.usuario.Usuario;
+import com.kellyacademy.user.entity.Permiso;
+import com.kellyacademy.user.entity.Rol;
+import com.kellyacademy.user.entity.Usuario;
+import com.kellyacademy.user.enums.EstadoUsuario;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -60,7 +61,7 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return true;
+        return usuario.getEstado() != EstadoUsuario.BLOQUEADO;
     }
 
     @Override
@@ -70,7 +71,7 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return usuario.getEstado() == EstadoUsuario.ACTIVO;
     }
 
     public Usuario getUsuario() {

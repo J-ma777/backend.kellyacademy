@@ -1,4 +1,4 @@
-package com.kellyacademy.model.base;
+package com.kellyacademy.shared.base;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;

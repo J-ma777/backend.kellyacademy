@@ -1,2 +1,67 @@
-/mvnw text eol=lf
-*.cmd text eol=crlf
+# =========================================
+# KELLY ACADEMY LMS - .gitattributes
+# =========================================
+
+# -----------------------------------------
+# Normalizacion automatica
+# -----------------------------------------
+# En el repositorio los archivos se guardan con LF (Unix)
+# En Windows se convierten a CRLF al hacer checkout
+* text=auto eol=lf
+
+# -----------------------------------------
+# Archivos de codigo (LF siempre)
+# -----------------------------------------
+*.java       text eol=lf
+*.kt         text eol=lf
+*.groovy     text eol=lf
+*.xml        text eol=lf
+*.properties text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.json       text eol=lf
+*.sql        text eol=lf
+*.md         text eol=lf
+*.txt        text eol=lf
+
+# -----------------------------------------
+# Scripts de shell (LF siempre)
+# -----------------------------------------
+*.sh         text eol=lf
+/mvnw        text eol=lf
+
+# -----------------------------------------
+# Scripts de Windows (CRLF siempre)
+# -----------------------------------------
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
+/mvnw.cmd    text eol=crlf
+
+# -----------------------------------------
+# Archivos binarios (sin conversion)
+# -----------------------------------------
+*.jar        binary
+*.war        binary
+*.ear        binary
+*.class      binary
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.gif        binary
+*.ico        binary
+*.pdf        binary
+*.zip        binary
+*.tar        binary
+*.gz         binary
+*.7z         binary
+*.woff       binary
+*.woff2      binary
+*.ttf        binary
+*.eot        binary
+
+# -----------------------------------------
+# Excluir del empaquetado de GitHub
+# -----------------------------------------
+.idea/            export-ignore
+.gitignore        export-ignore
+.gitattributes    export-ignore

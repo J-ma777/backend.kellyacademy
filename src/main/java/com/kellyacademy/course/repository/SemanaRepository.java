@@ -1,0 +1,17 @@
+package com.kellyacademy.course.repository;
+
+import com.kellyacademy.course.entity.Semana;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface SemanaRepository extends JpaRepository<Semana, UUID> {
+
+    List<Semana> findByUnidadIdOrderByNumeroAsc(UUID unidadId);
+
+    Optional<Semana> findByUnidadIdAndNumero(UUID unidadId, Integer numero);
+
+    Optional<Semana> findByUnidadIdAndEsActualTrue(UUID unidadId);
+}

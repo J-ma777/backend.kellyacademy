@@ -17,6 +17,10 @@ cuando se resuelva, indicando el commit.
 | 8  | Warning de Spring Security sobre `AuthenticationProvider` manual | security | FASE 6      | Pendiente |
 | 9  | Warning de Mockito self-attaching | testing  | FASE 6      | Pendiente |
 | 10 | RolResponse anida permisos — revisar cuando Rol.permisos pase a LAZY | user     | FASE 4      | Pendiente |
+| 11 | `CursoResponse` embebe `UsuarioResumenResponse` — dispara EAGER de `Usuario.roles` y `Rol.permisos` | course | FASE 4 | Pendiente |
+| 12 | Endpoint administrativo para cambiar docente de un curso | course | FASE 5 | Pendiente |
+| 13 | Endpoint administrativo para cambiar estado de curso (con maquina de estados) | course | FASE 5 | Pendiente |
+| 14 | Validar que `docenteId` tenga rol DOCENTE antes de asignarlo a un curso | course | FASE 4 | Pendiente |
 
 ## Resueltos
 

@@ -23,6 +23,10 @@ cuando se resuelva, indicando el commit.
 | 14 | Validar que `docenteId` tenga rol DOCENTE antes de asignarlo a un curso | course | FASE 4 | Pendiente |
 | 15 | `esActual` de `Semana` no se puede cambiar via `PUT` — requiere endpoint `PATCH /semanas/{id}/marcar-actual` con logica transaccional (desmarcar la anterior) | course | FASE 4 | Pendiente |
 | 16 | Reordenar `numero` de unidades o semanas — requiere endpoint de operacion masiva (no `PUT` individual) por restriccion `UNIQUE(curso_id, numero)` y `UNIQUE(unidad_id, numero)` | course | FASE 5 | Pendiente |
+| 17 | `Material` permite crear sin `urlArchivo` ni `urlExterno` — validar "al menos una URL" en servicio | course | FASE 4 | Pendiente |
+| 18 | `Clase.urlVivo` y `urlGrabacion` — no hay validacion de formato de URL (solo longitud) | course | FASE 4 | Pendiente |
+| 19 | Cambiar `semanaId` de `Clase`, `Material` o `Tarea` (mover entre semanas) — requiere endpoint dedicado | course | FASE 5 | Pendiente |
+
 
 ## Resueltos
 

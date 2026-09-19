@@ -41,6 +41,9 @@ cuando se resuelva, indicando el commit.
 | 32 | Endpoint dedicado `PATCH /mensajes/{id}/leer` y `PATCH /conversaciones/{id}/leer-todos` para marcar `leido`. | communication | FASE 5 | Pendiente |
 | 33 | Validar en servicio que el usuario autenticado sea participante de la `Conversacion` antes de insertar `Mensaje`. | communication | FASE 4 | Pendiente |
 | 34 | Endpoint dedicado `PATCH /conversaciones/{id}/asunto` si se necesita editar asunto post-creacion. | communication | FASE 5 | Pendiente |
+| 35 | Endpoint `PATCH /notificaciones/{id}/leer` y `PATCH /notificaciones/leer-todas` con validacion de que la notificacion pertenece al usuario autenticado. | communication | FASE 5 | Pendiente |
+| 36 | `NotificacionService.crear(...)` interno para que otros servicios (calificaciones, mensajes, anuncios) generen notificaciones. Sin endpoint publico de creacion. | communication | FASE 5 | Pendiente |
+| 37 | Endpoints `GET /notificaciones` y `GET /notificaciones/no-leidas` y `GET /notificaciones/count-no-leidas` filtrados por usuario autenticado. | communication | FASE 5 | Pendiente |
 
 
 ## Resueltos

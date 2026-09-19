@@ -22,7 +22,7 @@ public class Rol extends BaseEntity {
     @Column(length = 500)
     private String descripcion;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "rol_permiso",
             joinColumns = @JoinColumn(name = "rol_id"),

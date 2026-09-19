@@ -36,7 +36,7 @@ public class Usuario extends BaseEntity {
     @Column(nullable = false)
     private EstadoUsuario estado;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "usuario_rol",
             joinColumns = @JoinColumn(name = "usuario_id"),

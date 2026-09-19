@@ -7,8 +7,6 @@ cuando se resuelva, indicando el commit.
 
 | #  | Deuda | Feature  | Resolver en | Estado |
 |----|---|----------|-------------|---|
-| 1  | `Usuario.roles` con `FetchType.EAGER` — riesgo N+1 en listados paginados | user     | FASE 4      | Pendiente |
-| 2  | `Rol.permisos` con `FetchType.EAGER` — agrava el punto 1 | user     | FASE 4      | Pendiente |
 | 3  | Endpoint administrativo para cambiar `estado` de usuario | user     | FASE 5      | Pendiente |
 | 4  | Endpoint de cambio de contrasena con validacion de contrasena actual | user     | FASE 5      | Pendiente |
 | 5  | Endpoint de cambio de correo con verificacion por email | user     | FASE 7      | Pendiente |
@@ -58,13 +56,23 @@ cuando se resuelva, indicando el commit.
 | 49 | Validar en servicio que `RecursoBiblioteca` tenga al menos `urlArchivo` o `urlExterno`. Sin ninguna URL el recurso no es descargable. | library | FASE 4 | Pendiente |
 | 50 | Endpoint `POST /recursos/{id}/descargar` que incremente `contadorDescargas` y retorne la URL. Requiere `@Modifying` query o `@Transactional` con incremento atomico. | library | FASE 5 | Pendiente |
 | 51 | Validar en servicio que `urlExterno` tenga formato de URL valido (no solo longitud). | library | FASE 4 | Pendiente |
+| 52 | Auditar `RolResponse` (deuda #10) ahora que `Rol.permisos` es LAZY: todo mapper que itere `permisos` debe invocarse dentro de `@Transactional(readOnly = true)` o con entidades cargadas via `@EntityGraph`. | user | FASE 4 | Pendiente |
+| 53 | Auditar todos los mappers que accedan a `Usuario.roles` o `Rol.permisos` (`UsuarioMapper.toResponse`, `RolMapper.toResponse`). Asegurar que se invoquen dentro de `@Transactional(readOnly = true)` o con `@EntityGraph`. | user | FASE 4 | Pendiente |
+| 54 | Documentar en README los dos flujos de arranque: (a) IDE con `.env` inyectado, (b) terminal con `./mvnw spring-boot:run` que carga `.env` via `spring.config.import`. | infrastructure | FASE 5 | Pendiente |
+| 55 | Auditar uso de `APP_CORS_ALLOWED_ORIGINS` — confirmar que `SecurityConfig` lo lee desde properties y no esta hardcodeado. | security | FASE 4 | Pendiente |
 
 
 ## Resueltos
 
 | # | Deuda | Commit | Fecha |
 |---|---|---|---|
-| — | — | — | — |
+## Resueltos
+
+| # | Deuda | Commit | Fecha |
+|---|---|---|---|
+| 1 | `Usuario.roles` con `FetchType.EAGER` — riesgo N+1 en listados paginados | refactor/user-lazy-fetching | 2026-09-18 |
+| 2 | `Rol.permisos` con `FetchType.EAGER` — agrava el punto 1 | refactor/user-lazy-fetching | 2026-09-18 |
+
 
 ### Decisiones por diseno (no son deuda)
 
@@ -86,4 +94,7 @@ cuando se resuelva, indicando el commit.
 - `RecursoBiblioteca.contadorDescargas` no va en requests; lo maneja el servicio via endpoint dedicado de descarga.
 - `RecursoResumenResponse` no incluye URLs ni descripcion: en listados de catalogo solo se muestran tarjetas con titulo, categoria, nivel, tipo y popularidad. El detalle completo se consulta aparte.
 - `RecursoBiblioteca` reutiliza `NivelCefr` y `TipoMaterial` de `course`. No se duplican enums para evitar divergencia.
+- `Usuario.roles` y `Rol.permisos` son `FetchType.LAZY`. Los metodos que necesitan cargar el grafo completo usan `@EntityGraph` explicito: `UsuarioRepository.findByCorreoElectronico` carga `{"roles", "roles.permisos"}` para que `CustomUserDetails` funcione; `RolRepository.findByNombre` carga `{"permisos"}` para que `RolMapper.toResponse` funcione. `open-in-view=false` en `application.properties` garantiza que ningun acceso LAZY fuera de transaccion pase silenciosamente.
+- El archivo `.env` de desarrollo local se carga via `spring.config.import=optional:file:./.env[.properties]` en `application-dev.properties`. El prefijo `optional:` evita fallo en produccion, donde las variables vienen del orquestador y `.env` no existe.
+- `spring.profiles.active=${SPRING_PROFILES_ACTIVE:dev}` en `application.properties`: produccion debe definir `SPRING_PROFILES_ACTIVE=prod` desde el orquestador. El default `dev` es solo para arranque local.
 - 

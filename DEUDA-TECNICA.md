@@ -49,6 +49,12 @@ cuando se resuelva, indicando el commit.
 | 40 | Validar en servicio que no se solapen bloques de disponibilidad del mismo docente y dia. Requiere query de interseccion. | calendar | FASE 4 | Pendiente |
 | 41 | Validar en servicio que el usuario autenticado sea el docente dueno o ADMIN al crear/modificar `DisponibilidadTutoria`. | calendar | FASE 4 | Pendiente |
 | 42 | Validar en servicio que al crear `Evento`, si `cursoId != null`, el usuario pertenezca al curso (docente o estudiante matriculado). | calendar | FASE 4 | Pendiente |
+| 43 | Endpoint `PATCH /tutorias/{id}/estado` con validacion de transiciones (PENDIENTE -> CONFIRMADA / CANCELADA; CONFIRMADA -> COMPLETADA / CANCELADA; COMPLETADA y CANCELADA terminales). | calendar | FASE 5 | Pendiente |
+| 44 | Validar en servicio que `fecha` y `duracionMinutos` de `Tutoria` solo sean editables cuando `estado = PENDIENTE`. | calendar | FASE 4 | Pendiente |
+| 45 | Validar en servicio que `Tutoria.fecha > now()` al crear. | calendar | FASE 4 | Pendiente |
+| 46 | Validar en servicio que el usuario autenticado sea el estudiante, el docente o ADMIN al crear/modificar `Tutoria`. | calendar | FASE 4 | Pendiente |
+| 47 | Validar en servicio que el docente tenga disponibilidad (`DisponibilidadTutoria`) en el bloque solicitado al crear `Tutoria`. Requiere cruzar `DayOfWeek` + rango horario. | calendar | FASE 6 | Pendiente |
+| 48 | Validar en servicio que no exista solapamiento con otras tutorias CONFIRMADAS del mismo docente o estudiante. | calendar | FASE 6 | Pendiente |
 
 
 ## Resueltos
@@ -70,4 +76,8 @@ cuando se resuelva, indicando el commit.
 - `Evento.usuarioId` no va en `CrearEventoRequest`: el servicio lo resuelve del SecurityContext. Un usuario solo gestiona sus propios eventos. Vista admin se cubre con `GET /eventos?usuarioId=X` en FASE 5.
 - `Evento.curso` inmutable tras creacion. Vincular un evento personal a un curso despues cambia el contexto semantico del evento; se borra y recrea si es necesario.
 - `DisponibilidadTutoria.bloqueada` editable via PUT: flag operativo del docente, sin maquina de estados. Distinto de `Anuncio.activo` (soft-delete) y `Tutoria.estado` (maquina de estados).
+- `Tutoria.estado` no va en `CrearTutoriaRequest` (se inicializa en PENDIENTE) ni en `ActualizarTutoriaRequest` (va por PATCH dedicado con maquina de estados).
+- `Tutoria.curso` inmutable tras creacion: la tutoria es de un curso o no lo es; cambiar de contexto requiere borrar y recrear.
+- `Tutoria.notas` editable siempre, sin restriccion de estado: es informacion, no operacion critica.
+- `CrearTutoriaRequest` recibe `estudianteId` y `docenteId` explicitos; el servicio valida que el usuario autenticado sea uno de los dos (o ADMIN). Un solo DTO para los dos flujos.
 - 

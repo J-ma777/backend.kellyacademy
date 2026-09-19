@@ -55,6 +55,9 @@ cuando se resuelva, indicando el commit.
 | 46 | Validar en servicio que el usuario autenticado sea el estudiante, el docente o ADMIN al crear/modificar `Tutoria`. | calendar | FASE 4 | Pendiente |
 | 47 | Validar en servicio que el docente tenga disponibilidad (`DisponibilidadTutoria`) en el bloque solicitado al crear `Tutoria`. Requiere cruzar `DayOfWeek` + rango horario. | calendar | FASE 6 | Pendiente |
 | 48 | Validar en servicio que no exista solapamiento con otras tutorias CONFIRMADAS del mismo docente o estudiante. | calendar | FASE 6 | Pendiente |
+| 49 | Validar en servicio que `RecursoBiblioteca` tenga al menos `urlArchivo` o `urlExterno`. Sin ninguna URL el recurso no es descargable. | library | FASE 4 | Pendiente |
+| 50 | Endpoint `POST /recursos/{id}/descargar` que incremente `contadorDescargas` y retorne la URL. Requiere `@Modifying` query o `@Transactional` con incremento atomico. | library | FASE 5 | Pendiente |
+| 51 | Validar en servicio que `urlExterno` tenga formato de URL valido (no solo longitud). | library | FASE 4 | Pendiente |
 
 
 ## Resueltos
@@ -80,4 +83,7 @@ cuando se resuelva, indicando el commit.
 - `Tutoria.curso` inmutable tras creacion: la tutoria es de un curso o no lo es; cambiar de contexto requiere borrar y recrear.
 - `Tutoria.notas` editable siempre, sin restriccion de estado: es informacion, no operacion critica.
 - `CrearTutoriaRequest` recibe `estudianteId` y `docenteId` explicitos; el servicio valida que el usuario autenticado sea uno de los dos (o ADMIN). Un solo DTO para los dos flujos.
+- `RecursoBiblioteca.contadorDescargas` no va en requests; lo maneja el servicio via endpoint dedicado de descarga.
+- `RecursoResumenResponse` no incluye URLs ni descripcion: en listados de catalogo solo se muestran tarjetas con titulo, categoria, nivel, tipo y popularidad. El detalle completo se consulta aparte.
+- `RecursoBiblioteca` reutiliza `NivelCefr` y `TipoMaterial` de `course`. No se duplican enums para evitar divergencia.
 - 

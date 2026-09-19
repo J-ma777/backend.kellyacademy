@@ -27,6 +27,37 @@ cuando se resuelva, indicando el commit.
 | 18 | `Clase.urlVivo` y `urlGrabacion` — no hay validacion de formato de URL (solo longitud) | course | FASE 4 | Pendiente |
 | 19 | Cambiar `semanaId` de `Clase`, `Material` o `Tarea` (mover entre semanas) — requiere endpoint dedicado | course | FASE 5 | Pendiente |
 | 20 | Tests con H2 + `create-drop` no validan que las migraciones Flyway coincidan con las entidades. Cobertura real requiere Testcontainers con Postgres. | testing | FASE 6 | Pendiente |
+| 21 | Endpoint `PATCH /entregas/{id}/calificar` — setea `nota`, `retroalimentacion` y pasa `estado` a `CALIFICADA` con validacion de puntaje maximo de la `Tarea` | enrollment | FASE 5 | Pendiente |
+| 22 | Endpoint administrativo para cambiar `estado` de `Matricula` (maquina de estados: ACTIVA -> COMPLETADA / RIESGO / ABANDONADA) | enrollment | FASE 5 | Pendiente |
+| 23 | Calculo automatico de `notaFinal` y `asistenciaPorcentaje` de `Matricula` a partir de entregas y asistencias | enrollment | FASE 6 | Pendiente |
+| 24 | Validar en servicio que no se pueda re-subir archivo de `Entrega` si `estado = CALIFICADA` | enrollment | FASE 4 | Pendiente |
+| 25 | `Entrega.estado` (PENDIENTE / TARDE) se calcula comparando `enviadoAt` con `Tarea.fechaLimite` en el servicio de creacion. Sin tests aun. | enrollment | FASE 6 | Pendiente |
+| 26 | Validar en servicio que `estudianteId` este matriculado en el curso de la `Clase` antes de registrar `Asistencia` | attendance | FASE 4 | Pendiente |
+| 27 | Validar en servicio que `claseId` corresponda a una clase ya impartida (`fechaHora <= now()`) antes de registrar asistencia | attendance | FASE 4 | Pendiente |
+| 28 | `Conversacion` unique constraint no normaliza orden de participantes — (A,B) y (B,A) son filas distintas. Mitigacion actual: servicio normaliza orden por UUID antes de crear. Solucion robusta: indice funcional Postgres con LEAST/GREATEST (requiere Testcontainers). | communication | FASE 6 | Pendiente |
+| 29 | Validar en servicio que ambos participantes de una `Conversacion` pertenezcan al `Curso` referenciado (docente del curso o estudiante matriculado). | communication | FASE 4 | Pendiente |
+| 30 | Validar en servicio que `otroParticipanteId != usuarioAutenticado.id` al crear conversacion. | communication | FASE 4 | Pendiente |
+| 31 | Endpoint dedicado `PATCH /anuncios/{id}/archivar` para cambiar `activo`. | communication | FASE 5 | Pendiente |
+| 32 | Endpoint dedicado `PATCH /mensajes/{id}/leer` y `PATCH /conversaciones/{id}/leer-todos` para marcar `leido`. | communication | FASE 5 | Pendiente |
+| 33 | Validar en servicio que el usuario autenticado sea participante de la `Conversacion` antes de insertar `Mensaje`. | communication | FASE 4 | Pendiente |
+| 34 | Endpoint dedicado `PATCH /conversaciones/{id}/asunto` si se necesita editar asunto post-creacion. | communication | FASE 5 | Pendiente |
+| 35 | Endpoint `PATCH /notificaciones/{id}/leer` y `PATCH /notificaciones/leer-todas` con validacion de que la notificacion pertenece al usuario autenticado. | communication | FASE 5 | Pendiente |
+| 36 | `NotificacionService.crear(...)` interno para que otros servicios (calificaciones, mensajes, anuncios) generen notificaciones. Sin endpoint publico de creacion. | communication | FASE 5 | Pendiente |
+| 37 | Endpoints `GET /notificaciones` y `GET /notificaciones/no-leidas` y `GET /notificaciones/count-no-leidas` filtrados por usuario autenticado. | communication | FASE 5 | Pendiente |
+| 38 | Validar en servicio que `Evento.fin > Evento.inicio` cuando `fin != null`. | calendar | FASE 4 | Pendiente |
+| 39 | Validar en servicio que `DisponibilidadTutoria.horaFin > horaInicio`. | calendar | FASE 4 | Pendiente |
+| 40 | Validar en servicio que no se solapen bloques de disponibilidad del mismo docente y dia. Requiere query de interseccion. | calendar | FASE 4 | Pendiente |
+| 41 | Validar en servicio que el usuario autenticado sea el docente dueno o ADMIN al crear/modificar `DisponibilidadTutoria`. | calendar | FASE 4 | Pendiente |
+| 42 | Validar en servicio que al crear `Evento`, si `cursoId != null`, el usuario pertenezca al curso (docente o estudiante matriculado). | calendar | FASE 4 | Pendiente |
+| 43 | Endpoint `PATCH /tutorias/{id}/estado` con validacion de transiciones (PENDIENTE -> CONFIRMADA / CANCELADA; CONFIRMADA -> COMPLETADA / CANCELADA; COMPLETADA y CANCELADA terminales). | calendar | FASE 5 | Pendiente |
+| 44 | Validar en servicio que `fecha` y `duracionMinutos` de `Tutoria` solo sean editables cuando `estado = PENDIENTE`. | calendar | FASE 4 | Pendiente |
+| 45 | Validar en servicio que `Tutoria.fecha > now()` al crear. | calendar | FASE 4 | Pendiente |
+| 46 | Validar en servicio que el usuario autenticado sea el estudiante, el docente o ADMIN al crear/modificar `Tutoria`. | calendar | FASE 4 | Pendiente |
+| 47 | Validar en servicio que el docente tenga disponibilidad (`DisponibilidadTutoria`) en el bloque solicitado al crear `Tutoria`. Requiere cruzar `DayOfWeek` + rango horario. | calendar | FASE 6 | Pendiente |
+| 48 | Validar en servicio que no exista solapamiento con otras tutorias CONFIRMADAS del mismo docente o estudiante. | calendar | FASE 6 | Pendiente |
+| 49 | Validar en servicio que `RecursoBiblioteca` tenga al menos `urlArchivo` o `urlExterno`. Sin ninguna URL el recurso no es descargable. | library | FASE 4 | Pendiente |
+| 50 | Endpoint `POST /recursos/{id}/descargar` que incremente `contadorDescargas` y retorne la URL. Requiere `@Modifying` query o `@Transactional` con incremento atomico. | library | FASE 5 | Pendiente |
+| 51 | Validar en servicio que `urlExterno` tenga formato de URL valido (no solo longitud). | library | FASE 4 | Pendiente |
 
 
 ## Resueltos
@@ -34,3 +65,25 @@ cuando se resuelva, indicando el commit.
 | # | Deuda | Commit | Fecha |
 |---|---|---|---|
 | — | — | — | — |
+
+### Decisiones por diseno (no son deuda)
+
+- `Matricula` no tiene `ActualizarMatriculaRequest`. No se edita via `PUT`. Todo cambio va por endpoints dedicados (estado, nota final, asistencia). Esto es intencional: evita mutaciones indebidas sobre relaciones inmutables (`curso`, `estudiante`) y campos derivados (`notaFinal`, `asistenciaPorcentaje`).
+- `Entrega` se crea al momento del envio, no pre-generada al matricular. `CrearEntregaRequest` exige `urlArchivo`. Si en el futuro se permite pre-generar entregas en `PENDIENTE`, se relaja a nullable y se agrega endpoint separado para subir archivo.
+- `Asistencia.estado` SI se permite editar via `PUT` porque es dato operativo editable (el docente corrige asistencia). La regla "estados por endpoint dedicado" aplica a estados administrativos (rol, estado de cuenta, estado de curso), no a datos operativos.
+- `Asistencia.registradoAt` no se recalcula en `actualizarDesdeRequest`. Es la marca original del registro; para "ultima modificacion" ya existe `fechaActualizacion` de `BaseEntity`.
+- `Conversacion.mensajesNoLeidos` no es campo de entidad; se calcula via `MensajeRepository.countByConversacionIdAndRemitenteIdNotAndLeidoFalse`. El mapper tiene dos metodos sobrecargados: `toResponse(Conversacion)` (sin conteo, `null`) y `toResponse(Conversacion, long)` (con conteo).
+- `Mensaje` no tiene `ActualizarMensajeRequest`: un mensaje enviado no se edita.
+- `Notificacion` no expone endpoint de creacion publica: se genera desde servicios internos para evitar auto-notificacion y spam.
+- `Conversacion.crear` recibe solo `otroParticipanteId`; el `participante1` se resuelve del SecurityContext para evitar suplantacion.
+- `Evento.usuarioId` no va en `CrearEventoRequest`: el servicio lo resuelve del SecurityContext. Un usuario solo gestiona sus propios eventos. Vista admin se cubre con `GET /eventos?usuarioId=X` en FASE 5.
+- `Evento.curso` inmutable tras creacion. Vincular un evento personal a un curso despues cambia el contexto semantico del evento; se borra y recrea si es necesario.
+- `DisponibilidadTutoria.bloqueada` editable via PUT: flag operativo del docente, sin maquina de estados. Distinto de `Anuncio.activo` (soft-delete) y `Tutoria.estado` (maquina de estados).
+- `Tutoria.estado` no va en `CrearTutoriaRequest` (se inicializa en PENDIENTE) ni en `ActualizarTutoriaRequest` (va por PATCH dedicado con maquina de estados).
+- `Tutoria.curso` inmutable tras creacion: la tutoria es de un curso o no lo es; cambiar de contexto requiere borrar y recrear.
+- `Tutoria.notas` editable siempre, sin restriccion de estado: es informacion, no operacion critica.
+- `CrearTutoriaRequest` recibe `estudianteId` y `docenteId` explicitos; el servicio valida que el usuario autenticado sea uno de los dos (o ADMIN). Un solo DTO para los dos flujos.
+- `RecursoBiblioteca.contadorDescargas` no va en requests; lo maneja el servicio via endpoint dedicado de descarga.
+- `RecursoResumenResponse` no incluye URLs ni descripcion: en listados de catalogo solo se muestran tarjetas con titulo, categoria, nivel, tipo y popularidad. El detalle completo se consulta aparte.
+- `RecursoBiblioteca` reutiliza `NivelCefr` y `TipoMaterial` de `course`. No se duplican enums para evitar divergencia.
+- 

@@ -27,6 +27,11 @@ cuando se resuelva, indicando el commit.
 | 18 | `Clase.urlVivo` y `urlGrabacion` — no hay validacion de formato de URL (solo longitud) | course | FASE 4 | Pendiente |
 | 19 | Cambiar `semanaId` de `Clase`, `Material` o `Tarea` (mover entre semanas) — requiere endpoint dedicado | course | FASE 5 | Pendiente |
 | 20 | Tests con H2 + `create-drop` no validan que las migraciones Flyway coincidan con las entidades. Cobertura real requiere Testcontainers con Postgres. | testing | FASE 6 | Pendiente |
+| 21 | Endpoint `PATCH /entregas/{id}/calificar` — setea `nota`, `retroalimentacion` y pasa `estado` a `CALIFICADA` con validacion de puntaje maximo de la `Tarea` | enrollment | FASE 5 | Pendiente |
+| 22 | Endpoint administrativo para cambiar `estado` de `Matricula` (maquina de estados: ACTIVA -> COMPLETADA / RIESGO / ABANDONADA) | enrollment | FASE 5 | Pendiente |
+| 23 | Calculo automatico de `notaFinal` y `asistenciaPorcentaje` de `Matricula` a partir de entregas y asistencias | enrollment | FASE 6 | Pendiente |
+| 24 | Validar en servicio que no se pueda re-subir archivo de `Entrega` si `estado = CALIFICADA` | enrollment | FASE 4 | Pendiente |
+| 25 | `Entrega.estado` (PENDIENTE / TARDE) se calcula comparando `enviadoAt` con `Tarea.fechaLimite` en el servicio de creacion. Sin tests aun. | enrollment | FASE 6 | Pendiente |
 
 
 ## Resueltos

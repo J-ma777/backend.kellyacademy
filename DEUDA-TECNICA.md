@@ -44,6 +44,11 @@ cuando se resuelva, indicando el commit.
 | 35 | Endpoint `PATCH /notificaciones/{id}/leer` y `PATCH /notificaciones/leer-todas` con validacion de que la notificacion pertenece al usuario autenticado. | communication | FASE 5 | Pendiente |
 | 36 | `NotificacionService.crear(...)` interno para que otros servicios (calificaciones, mensajes, anuncios) generen notificaciones. Sin endpoint publico de creacion. | communication | FASE 5 | Pendiente |
 | 37 | Endpoints `GET /notificaciones` y `GET /notificaciones/no-leidas` y `GET /notificaciones/count-no-leidas` filtrados por usuario autenticado. | communication | FASE 5 | Pendiente |
+| 38 | Validar en servicio que `Evento.fin > Evento.inicio` cuando `fin != null`. | calendar | FASE 4 | Pendiente |
+| 39 | Validar en servicio que `DisponibilidadTutoria.horaFin > horaInicio`. | calendar | FASE 4 | Pendiente |
+| 40 | Validar en servicio que no se solapen bloques de disponibilidad del mismo docente y dia. Requiere query de interseccion. | calendar | FASE 4 | Pendiente |
+| 41 | Validar en servicio que el usuario autenticado sea el docente dueno o ADMIN al crear/modificar `DisponibilidadTutoria`. | calendar | FASE 4 | Pendiente |
+| 42 | Validar en servicio que al crear `Evento`, si `cursoId != null`, el usuario pertenezca al curso (docente o estudiante matriculado). | calendar | FASE 4 | Pendiente |
 
 
 ## Resueltos
@@ -62,4 +67,7 @@ cuando se resuelva, indicando el commit.
 - `Mensaje` no tiene `ActualizarMensajeRequest`: un mensaje enviado no se edita.
 - `Notificacion` no expone endpoint de creacion publica: se genera desde servicios internos para evitar auto-notificacion y spam.
 - `Conversacion.crear` recibe solo `otroParticipanteId`; el `participante1` se resuelve del SecurityContext para evitar suplantacion.
+- `Evento.usuarioId` no va en `CrearEventoRequest`: el servicio lo resuelve del SecurityContext. Un usuario solo gestiona sus propios eventos. Vista admin se cubre con `GET /eventos?usuarioId=X` en FASE 5.
+- `Evento.curso` inmutable tras creacion. Vincular un evento personal a un curso despues cambia el contexto semantico del evento; se borra y recrea si es necesario.
+- `DisponibilidadTutoria.bloqueada` editable via PUT: flag operativo del docente, sin maquina de estados. Distinto de `Anuncio.activo` (soft-delete) y `Tutoria.estado` (maquina de estados).
 - 

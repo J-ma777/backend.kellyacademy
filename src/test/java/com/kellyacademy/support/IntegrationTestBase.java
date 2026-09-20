@@ -1,11 +1,15 @@
 package com.kellyacademy.support;
 
+import com.kellyacademy.course.entity.Curso;
+import com.kellyacademy.course.enums.EstadoCurso;
 import com.kellyacademy.course.repository.ClaseRepository;
 import com.kellyacademy.course.repository.CursoRepository;
 import com.kellyacademy.course.repository.MaterialRepository;
 import com.kellyacademy.course.repository.SemanaRepository;
 import com.kellyacademy.course.repository.TareaRepository;
 import com.kellyacademy.course.repository.UnidadRepository;
+import com.kellyacademy.enrollment.repository.EntregaRepository;
+import com.kellyacademy.enrollment.repository.MatriculaRepository;
 import com.kellyacademy.security.auth.dto.AuthRequest;
 import com.kellyacademy.security.auth.dto.AuthResponse;
 import com.kellyacademy.user.entity.Permiso;
@@ -63,6 +67,8 @@ public abstract class IntegrationTestBase {
     @Autowired protected ClaseRepository claseRepository;
     @Autowired protected MaterialRepository materialRepository;
     @Autowired protected TareaRepository tareaRepository;
+    @Autowired protected MatriculaRepository matriculaRepository;
+    @Autowired protected EntregaRepository entregaRepository;
 
     // IDs y tokens utiles para los tests hijos.
     protected UUID adminId;
@@ -234,12 +240,43 @@ public abstract class IntegrationTestBase {
         );
     }
 
+    protected <T> ResponseEntity<T> deleteWithBody(String url, String token, Class<T> respType) {
+        return rest.exchange(
+                url, HttpMethod.DELETE,
+                new HttpEntity<>(headersConToken(token)),
+                respType
+        );
+    }
+
+    // ------------------------------------------------------------------------
+    // HELPERS DE ESTADO DE CURSO
+    // ------------------------------------------------------------------------
+
+    // No hay endpoint administrativo de cambio de estado de curso aun (deuda #13, FASE 5).
+    // Los ITs que necesiten curso ACTIVO lo activan por repositorio.
+    protected void activarCurso(UUID cursoId) {
+        cambiarEstadoCurso(cursoId, EstadoCurso.ACTIVO);
+    }
+
+    protected void desactivarCurso(UUID cursoId) {
+        cambiarEstadoCurso(cursoId, EstadoCurso.BORRADOR);
+    }
+
+    private void cambiarEstadoCurso(UUID cursoId, EstadoCurso estado) {
+        Curso curso = cursoRepository.findById(cursoId)
+                .orElseThrow(() -> new IllegalStateException("Curso no encontrado: " + cursoId));
+        curso.setEstado(estado);
+        cursoRepository.save(curso);
+    }
+
     // ------------------------------------------------------------------------
     // LIMPIEZA
     // ------------------------------------------------------------------------
 
     protected void limpiarTablas() {
         // Orden inverso a las FKs: hijos primero.
+        entregaRepository.deleteAll();
+        matriculaRepository.deleteAll();
         tareaRepository.deleteAll();
         materialRepository.deleteAll();
         claseRepository.deleteAll();
@@ -249,13 +286,5 @@ public abstract class IntegrationTestBase {
         usuarioRepository.deleteAll();
         rolRepository.deleteAll();
         permisoRepository.deleteAll();
-    }
-
-    protected <T> ResponseEntity<T> deleteWithBody(String url, String token, Class<T> respType) {
-        return rest.exchange(
-                url, HttpMethod.DELETE,
-                new HttpEntity<>(headersConToken(token)),
-                respType
-        );
     }
 }

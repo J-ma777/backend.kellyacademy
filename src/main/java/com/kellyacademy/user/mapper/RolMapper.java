@@ -13,7 +13,6 @@ import org.mapstruct.ReportingPolicy;
 
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Mapper(
         componentModel = "spring",
@@ -38,6 +37,6 @@ public interface RolMapper {
         return permisos.stream()
                 .map(this::toPermisoResumenResponse)
                 .sorted((a, b) -> a.nombre().compareTo(b.nombre()))
-                .collect(Collectors.toList());
+                .toList();
     }
 }

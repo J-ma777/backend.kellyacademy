@@ -30,6 +30,8 @@ public class UnidadService {
     private final CursoRepository cursoRepository;
     private final SemanaRepository semanaRepository;
     private final UnidadMapper unidadMapper;
+    private static final String RECURSO = "Unidad";
+    private static final String RECURSO_CURSO = "Curso";
 
     @Transactional(readOnly = true)
     public List<UnidadResumenResponse> listar(UUID cursoId) {
@@ -40,7 +42,7 @@ public class UnidadService {
             );
         }
         if (!cursoRepository.existsById(cursoId)) {
-            throw new ResourceNotFoundException("Curso", "id", cursoId);
+            throw new ResourceNotFoundException(RECURSO_CURSO, "id", cursoId);
         }
         return unidadRepository.findByCursoIdOrderByNumeroAsc(cursoId).stream()
                 .map(unidadMapper::toResumenResponse)
@@ -50,14 +52,14 @@ public class UnidadService {
     @Transactional(readOnly = true)
     public UnidadResponse obtener(UUID id) {
         Unidad unidad = unidadRepository.findWithCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Unidad", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
         return unidadMapper.toResponse(unidad);
     }
 
     public UnidadResponse crear(CrearUnidadRequest request) {
 
         Curso curso = cursoRepository.findWithDocenteById(request.cursoId())
-                .orElseThrow(() -> new ResourceNotFoundException("Curso", "id", request.cursoId()));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_CURSO, "id", request.cursoId()));
 
         validarPropietarioOAdmin(curso);
 
@@ -81,7 +83,7 @@ public class UnidadService {
     public UnidadResponse actualizar(UUID id, ActualizarUnidadRequest request) {
 
         Unidad unidad = unidadRepository.findWithCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Unidad", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarPropietarioOAdmin(unidad.getCurso());
 
@@ -93,7 +95,7 @@ public class UnidadService {
     public void eliminar(UUID id) {
 
         Unidad unidad = unidadRepository.findWithCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Unidad", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarPropietarioOAdmin(unidad.getCurso());
 

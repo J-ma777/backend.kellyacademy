@@ -28,6 +28,8 @@ public class MaterialService {
     private final MaterialRepository materialRepository;
     private final SemanaRepository semanaRepository;
     private final MaterialMapper materialMapper;
+    private static final String RECURSO = "Material";
+    private static final String RECURSO_SEMANA = "Semana";
 
     @Transactional(readOnly = true)
     public List<MaterialResumenResponse> listar(UUID semanaId) {
@@ -38,7 +40,7 @@ public class MaterialService {
             );
         }
         if (!semanaRepository.existsById(semanaId)) {
-            throw new ResourceNotFoundException("Semana", "id", semanaId);
+            throw new ResourceNotFoundException(RECURSO_SEMANA, "id", semanaId);
         }
         return materialRepository.findBySemanaId(semanaId).stream()
                 .map(materialMapper::toResumenResponse)
@@ -48,14 +50,14 @@ public class MaterialService {
     @Transactional(readOnly = true)
     public MaterialResponse obtener(UUID id) {
         Material material = materialRepository.findWithSemanaCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Material", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
         return materialMapper.toResponse(material);
     }
 
     public MaterialResponse crear(CrearMaterialRequest request) {
 
         Semana semana = semanaRepository.findWithUnidadCursoDocenteById(request.semanaId())
-                .orElseThrow(() -> new ResourceNotFoundException("Semana", "id", request.semanaId()));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_SEMANA, "id", request.semanaId()));
 
         validarAutorizacion(semana);
         validarUrls(request.urlArchivo(), request.urlExterno(), true);
@@ -73,7 +75,7 @@ public class MaterialService {
     public MaterialResponse actualizar(UUID id, ActualizarMaterialRequest request) {
 
         Material material = materialRepository.findWithSemanaCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Material", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarAutorizacion(material.getSemana());
         validarUrls(request.urlArchivo(), request.urlExterno(), true);
@@ -86,7 +88,7 @@ public class MaterialService {
     public void eliminar(UUID id) {
 
         Material material = materialRepository.findWithSemanaCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Material", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarAutorizacion(material.getSemana());
 

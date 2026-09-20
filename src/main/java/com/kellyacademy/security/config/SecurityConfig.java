@@ -54,7 +54,7 @@ public class SecurityConfig {
 
         http
                 .cors(Customizer.withDefaults())
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)  // API stateless con JWT en header Authorization; sin cookies de sesion, CSRF no aplica
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/auth/**", // Expone todos los endpoints de actuator

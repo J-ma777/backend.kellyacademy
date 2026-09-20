@@ -38,6 +38,8 @@ public class CursoService {
     private final CursoRepository cursoRepository;
     private final UsuarioRepository usuarioRepository;
     private final CursoMapper cursoMapper;
+    private static final String RECURSO = "Curso";
+    private static final String RECURSO_USUARIO = "Usuario";
 
     @Transactional(readOnly = true)
     public Page<CursoResumenResponse> listar(
@@ -64,7 +66,7 @@ public class CursoService {
     @Transactional(readOnly = true)
     public CursoResponse obtener(UUID id) {
         Curso curso = cursoRepository.findWithDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Curso", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         return cursoMapper.toResponse(curso);
     }
@@ -72,7 +74,7 @@ public class CursoService {
     public CursoResponse crear(CrearCursoRequest request) {
 
         Usuario docente = usuarioRepository.findWithRolesById(request.docenteId())
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", request.docenteId()));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_USUARIO, "id", request.docenteId()));
 
         validarDocenteTieneRolDocente(docente);
         validarFechas(request.fechaInicio(), request.fechaFin());
@@ -92,7 +94,7 @@ public class CursoService {
     public CursoResponse actualizar(UUID id, ActualizarCursoRequest request) {
 
         Curso curso = cursoRepository.findWithDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Curso", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarPropietarioOAdmin(curso);
         validarFechas(request.fechaInicio(), request.fechaFin());
@@ -105,7 +107,7 @@ public class CursoService {
     public void eliminar(UUID id) {
 
         Curso curso = cursoRepository.findWithDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Curso", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarPropietarioOAdmin(curso);
 

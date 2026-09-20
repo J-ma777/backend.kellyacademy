@@ -57,6 +57,7 @@ cuando se resuelva, indicando el commit.
 | 51 | Validar en servicio que `urlExterno` tenga formato de URL valido (no solo longitud). | library | FASE 4 | Pendiente |
 | 54 | Documentar en README los dos flujos de arranque: (a) IDE con `.env` inyectado, (b) terminal con `./mvnw spring-boot:run` que carga `.env` via `spring.config.import`. | infrastructure | FASE 5 | Pendiente |
 | 55 | Auditar uso de `APP_CORS_ALLOWED_ORIGINS` — confirmar que `SecurityConfig` lo lee desde properties y no esta hardcodeado. | security | FASE 4 | Pendiente |
+| 56 | `@EntityGraph(attributePaths = {"docente"})` en `CursoRepository.findAll(Specification, Pageable)` y `findWithDocenteById` carga la entidad `Usuario` completa, incluyendo `contrasena`, para exponer solo 6 campos escalares en `UsuarioResumenResponse`. Optimizable con proyeccion. Riesgo teorico: solo si se activa `org.hibernate.orm.jdbc.bind=TRACE` en produccion, los valores bind (incluido el hash) se imprimen en logs. | course | FASE 6 | Pendiente |
 
 
 ## Resueltos
@@ -68,7 +69,6 @@ cuando se resuelva, indicando el commit.
 | 10 | RolResponse anida permisos — revisar cuando Rol.permisos pase a LAZY | a5887b1 | 2026-09-19 |
 | 52 | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |
 | 53 | Auditar mappers que accedan a `Usuario.roles` o `Rol.permisos` | a5887b1 | 2026-09-19 |
-
 
 ### Decisiones por diseno (no son deuda)
 

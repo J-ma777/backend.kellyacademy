@@ -22,8 +22,6 @@ cuando se resuelva, indicando el commit.
 | 21 | Endpoint `PATCH /entregas/{id}/calificar` — setea `nota`, `retroalimentacion` y pasa `estado` a `CALIFICADA` con validacion de puntaje maximo de la `Tarea` | enrollment | FASE 5 | Pendiente |
 | 22 | Endpoint administrativo para cambiar `estado` de `Matricula` (maquina de estados: ACTIVA -> COMPLETADA / RIESGO / ABANDONADA) | enrollment | FASE 5 | Pendiente |
 | 23 | Calculo automatico de `notaFinal` y `asistenciaPorcentaje` de `Matricula` a partir de entregas y asistencias | enrollment | FASE 6 | Pendiente |
-| 24 | Validar en servicio que no se pueda re-subir archivo de `Entrega` si `estado = CALIFICADA` | enrollment | FASE 4 | Pendiente |
-| 25 | `Entrega.estado` (PENDIENTE / TARDE) se calcula comparando `enviadoAt` con `Tarea.fechaLimite` en el servicio de creacion. Sin tests aun. | enrollment | FASE 6 | Pendiente |
 | 26 | Validar en servicio que `estudianteId` este matriculado en el curso de la `Clase` antes de registrar `Asistencia` | attendance | FASE 4 | Pendiente |
 | 27 | Validar en servicio que `claseId` corresponda a una clase ya impartida (`fechaHora <= now()`) antes de registrar asistencia | attendance | FASE 4 | Pendiente |
 | 28 | `Conversacion` unique constraint no normaliza orden de participantes — (A,B) y (B,A) son filas distintas. Mitigacion actual: servicio normaliza orden por UUID antes de crear. Solucion robusta: indice funcional Postgres con LEAST/GREATEST (requiere Testcontainers). | communication | FASE 6 | Pendiente |
@@ -54,6 +52,9 @@ cuando se resuelva, indicando el commit.
 | 55 | Auditar uso de `APP_CORS_ALLOWED_ORIGINS` — confirmar que `SecurityConfig` lo lee desde properties y no esta hardcodeado. | security | FASE 4 | Pendiente |
 | 56 | `@EntityGraph(attributePaths = {"docente"})` en `CursoRepository.findAll(Specification, Pageable)` y `findWithDocenteById` carga la entidad `Usuario` completa, incluyendo `contrasena`, para exponer solo 6 campos escalares en `UsuarioResumenResponse`. Optimizable con proyeccion. Riesgo teorico: solo si se activa `org.hibernate.orm.jdbc.bind=TRACE` en produccion, los valores bind (incluido el hash) se imprimen en logs. | course | FASE 6 | Pendiente |
 | 57 | IntegrationTests levantan el contexto Spring completo (~20s por clase). Spring no reutiliza el contexto entre `UnidadControllerIT` y `SemanaControllerIT` pese a compartir configuracion. Optimizacion: revisar por que no se cachea, o migrar a `RestTestClient` (Spring Boot 4) que tiene mejor soporte. | testing | FASE 6 | Pendiente |
+| 58 | `Entrega` no distingue "asignacion del docente" de "envio del estudiante". Hoy se mezclan en un mismo registro (`enviadoAt` + `urlArchivo`). Si el dominio requiere separar los dos eventos (Submission con historial de intentos), FASE 6+. | enrollment | FASE 6 | Pendiente |
+| 59 | `EntregaService.eliminar` (ADMIN) no valida que la entrega no este `CALIFICADA`. Borrar una entrega calificada deja inconsistente el `notaFinal` futuro de la `Matricula`. | enrollment | FASE 5 | Pendiente |
+| 60 | `CrearEntregaRequest.urlArchivo` es `@NotBlank`. No permite pre-asignar tareas sin archivo inicial. Relajar a `@Nullable` + endpoint separado de subida cuando se implemente el flujo "docente asigna tarea sin archivo, estudiante sube despues". | enrollment | FASE 5 | Pendiente |
 
 
 ## Resueltos
@@ -68,6 +69,8 @@ cuando se resuelva, indicando el commit.
 | 15 | `esActual` de `Semana` no se puede cambiar via `PUT` — requiere endpoint `PATCH /semanas/{id}/marcar-actual` | 69e4b1b | 2026-09-20 |
 | 17 | `Material` permite crear sin `urlArchivo` ni `urlExterno` — validar "al menos una URL" en servicio | PR #6 | 2026-09-20 |
 | 18 | `Clase.urlVivo` y `urlGrabacion` — no hay validacion de formato de URL (solo longitud) | PR #6 | 2026-09-20 |
+| 24 | Validar en servicio que no se pueda re-subir archivo de `Entrega` si `estado = CALIFICADA` | PR #13 | 2026-09-20 |
+| 25 | `Entrega.estado` (PENDIENTE / TARDE) se calcula comparando `enviadoAt` con `Tarea.fechaLimite` en el servicio de creacion | PR #13 | 2026-09-20 |
 | 52 | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |
 | 53 | Auditar mappers que accedan a `Usuario.roles` o `Rol.permisos` | a5887b1 | 2026-09-19 |
 
@@ -76,6 +79,7 @@ cuando se resuelva, indicando el commit.
 
 - `Matricula` no tiene `ActualizarMatriculaRequest`. No se edita via `PUT`. Todo cambio va por endpoints dedicados (estado, nota final, asistencia). Esto es intencional: evita mutaciones indebidas sobre relaciones inmutables (`curso`, `estudiante`) y campos derivados (`notaFinal`, `asistenciaPorcentaje`).
 - `Entrega` se crea al momento del envio, no pre-generada al matricular. `CrearEntregaRequest` exige `urlArchivo`. Si en el futuro se permite pre-generar entregas en `PENDIENTE`, se relaja a nullable y se agrega endpoint separado para subir archivo.
+- `Entrega` es creada por el DOCENTE dueno del curso de la tarea (o ADMIN), no por el estudiante. El estudiante solo modifica la suya (`PUT`) mientras no este `CALIFICADA`. El endpoint `PUT` valida que el autenticado sea el estudiante dueno o ADMIN.
 - `Asistencia.estado` SI se permite editar via `PUT` porque es dato operativo editable (el docente corrige asistencia). La regla "estados por endpoint dedicado" aplica a estados administrativos (rol, estado de cuenta, estado de curso), no a datos operativos.
 - `Asistencia.registradoAt` no se recalcula en `actualizarDesdeRequest`. Es la marca original del registro; para "ultima modificacion" ya existe `fechaActualizacion` de `BaseEntity`.
 - `Conversacion.mensajesNoLeidos` no es campo de entidad; se calcula via `MensajeRepository.countByConversacionIdAndRemitenteIdNotAndLeidoFalse`. El mapper tiene dos metodos sobrecargados: `toResponse(Conversacion)` (sin conteo, `null`) y `toResponse(Conversacion, long)` (con conteo).
@@ -96,4 +100,3 @@ cuando se resuelva, indicando el commit.
 - El archivo `.env` de desarrollo local se carga via `spring.config.import=optional:file:./.env[.properties]` en `application-dev.properties`. El prefijo `optional:` evita fallo en produccion, donde las variables vienen del orquestador y `.env` no existe.
 - `spring.profiles.active=${SPRING_PROFILES_ACTIVE:dev}` en `application.properties`: produccion debe definir `SPRING_PROFILES_ACTIVE=prod` desde el orquestador. El default `dev` es solo para arranque local.
 - Los mappers que acceden a colecciones LAZY (`UsuarioMapper.toResponse` lee `Usuario.roles`, `RolMapper.toResponse` lee `Rol.permisos`) se invocan **exclusivamente** desde servicios `@Transactional(readOnly = true)` con entidades cargadas via `@EntityGraph` explicito (`UsuarioRepository.findWithRolesById`, `RolRepository.findWithPermisosById`). Nunca se invocan desde controllers ni desde metodos fuera de transaccion. Esta es la regla que cierra las deudas #10, #52 y #53.
-- 

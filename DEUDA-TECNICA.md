@@ -14,14 +14,9 @@ cuando se resuelva, indicando el commit.
 | 7  | Warning de API deprecada en `JwtAuthenticationFilter` | security | FASE 6      | Pendiente |
 | 8  | Warning de Spring Security sobre `AuthenticationProvider` manual | security | FASE 6      | Pendiente |
 | 9  | Warning de Mockito self-attaching | testing  | FASE 6      | Pendiente |
-| 11 | `CursoResponse` embebe `UsuarioResumenResponse` — dispara EAGER de `Usuario.roles` y `Rol.permisos` | course | FASE 4 | Pendiente |
 | 12 | Endpoint administrativo para cambiar docente de un curso | course | FASE 5 | Pendiente |
 | 13 | Endpoint administrativo para cambiar estado de curso (con maquina de estados) | course | FASE 5 | Pendiente |
-| 14 | Validar que `docenteId` tenga rol DOCENTE antes de asignarlo a un curso | course | FASE 4 | Pendiente |
-| 15 | `esActual` de `Semana` no se puede cambiar via `PUT` — requiere endpoint `PATCH /semanas/{id}/marcar-actual` con logica transaccional (desmarcar la anterior) | course | FASE 4 | Pendiente |
 | 16 | Reordenar `numero` de unidades o semanas — requiere endpoint de operacion masiva (no `PUT` individual) por restriccion `UNIQUE(curso_id, numero)` y `UNIQUE(unidad_id, numero)` | course | FASE 5 | Pendiente |
-| 17 | `Material` permite crear sin `urlArchivo` ni `urlExterno` — validar "al menos una URL" en servicio | course | FASE 4 | Pendiente |
-| 18 | `Clase.urlVivo` y `urlGrabacion` — no hay validacion de formato de URL (solo longitud) | course | FASE 4 | Pendiente |
 | 19 | Cambiar `semanaId` de `Clase`, `Material` o `Tarea` (mover entre semanas) — requiere endpoint dedicado | course | FASE 5 | Pendiente |
 | 20 | Tests con H2 + `create-drop` no validan que las migraciones Flyway coincidan con las entidades. Cobertura real requiere Testcontainers con Postgres. | testing | FASE 6 | Pendiente |
 | 21 | Endpoint `PATCH /entregas/{id}/calificar` — setea `nota`, `retroalimentacion` y pasa `estado` a `CALIFICADA` con validacion de puntaje maximo de la `Tarea` | enrollment | FASE 5 | Pendiente |
@@ -58,6 +53,7 @@ cuando se resuelva, indicando el commit.
 | 54 | Documentar en README los dos flujos de arranque: (a) IDE con `.env` inyectado, (b) terminal con `./mvnw spring-boot:run` que carga `.env` via `spring.config.import`. | infrastructure | FASE 5 | Pendiente |
 | 55 | Auditar uso de `APP_CORS_ALLOWED_ORIGINS` — confirmar que `SecurityConfig` lo lee desde properties y no esta hardcodeado. | security | FASE 4 | Pendiente |
 | 56 | `@EntityGraph(attributePaths = {"docente"})` en `CursoRepository.findAll(Specification, Pageable)` y `findWithDocenteById` carga la entidad `Usuario` completa, incluyendo `contrasena`, para exponer solo 6 campos escalares en `UsuarioResumenResponse`. Optimizable con proyeccion. Riesgo teorico: solo si se activa `org.hibernate.orm.jdbc.bind=TRACE` en produccion, los valores bind (incluido el hash) se imprimen en logs. | course | FASE 6 | Pendiente |
+| 57 | IntegrationTests levantan el contexto Spring completo (~20s por clase). Spring no reutiliza el contexto entre `UnidadControllerIT` y `SemanaControllerIT` pese a compartir configuracion. Optimizacion: revisar por que no se cachea, o migrar a `RestTestClient` (Spring Boot 4) que tiene mejor soporte. | testing | FASE 6 | Pendiente |
 
 
 ## Resueltos
@@ -67,8 +63,14 @@ cuando se resuelva, indicando el commit.
 | 1 | `Usuario.roles` con `FetchType.EAGER` — riesgo N+1 en listados paginados | refactor/user-lazy-fetching | 2026-09-18 |
 | 2 | `Rol.permisos` con `FetchType.EAGER` — agrava el punto 1 | refactor/user-lazy-fetching | 2026-09-18 |
 | 10 | RolResponse anida permisos — revisar cuando Rol.permisos pase a LAZY | a5887b1 | 2026-09-19 |
+| 11 | `CursoResponse` embebe `UsuarioResumenResponse` — dispara EAGER de `Usuario.roles` y `Rol.permisos` | e459b96 | 2026-09-19 |
+| 14 | Validar que `docenteId` tenga rol DOCENTE antes de asignarlo a un curso | e459b96 | 2026-09-19 |
+| 15 | `esActual` de `Semana` no se puede cambiar via `PUT` — requiere endpoint `PATCH /semanas/{id}/marcar-actual` | 69e4b1b | 2026-09-20 |
+| 17 | `Material` permite crear sin `urlArchivo` ni `urlExterno` — validar "al menos una URL" en servicio | PR #6 | 2026-09-20 |
+| 18 | `Clase.urlVivo` y `urlGrabacion` — no hay validacion de formato de URL (solo longitud) | PR #6 | 2026-09-20 |
 | 52 | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |
 | 53 | Auditar mappers que accedan a `Usuario.roles` o `Rol.permisos` | a5887b1 | 2026-09-19 |
+
 
 ### Decisiones por diseno (no son deuda)
 

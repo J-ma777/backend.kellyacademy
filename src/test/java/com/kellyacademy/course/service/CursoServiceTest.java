@@ -25,7 +25,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -38,6 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
 class CursoServiceTest {
@@ -223,10 +223,14 @@ class CursoServiceTest {
         assertThat(resultado.estado()).isEqualTo(EstadoCurso.BORRADOR);
         assertThat(resultado.titulo()).isEqualTo(request.titulo());
 
-        verify(cursoRepository).save(org.mockito.ArgumentMatchers.argThat(c ->
-                c.getEstado() == EstadoCurso.BORRADOR
-                        && c.getDocente() == docente
-        ));
+        // Verificacion de argumento pasado a save() via ArgumentCaptor en lugar de argThat.
+        // Mejora el debugging: si falla, el assert dice cual propiedad fallo, no un error generico.
+        ArgumentCaptor<Curso> captor = ArgumentCaptor.forClass(Curso.class);
+        verify(cursoRepository).save(captor.capture());
+
+        Curso cursoPersistido = captor.getValue();
+        assertThat(cursoPersistido.getEstado()).isEqualTo(EstadoCurso.BORRADOR);
+        assertThat(cursoPersistido.getDocente()).isSameAs(docente);
     }
 
     @Test

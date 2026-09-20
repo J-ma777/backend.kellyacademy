@@ -254,10 +254,12 @@ class CursoServiceTest {
         curso.setId(UUID.randomUUID());
         curso.setDocente(docenteConRol());  // docente original, no el autenticado
 
-        when(cursoRepository.findWithDocenteById(curso.getId()))
+        UUID cursoId = curso.getId();
+
+        when(cursoRepository.findWithDocenteById(cursoId))
                 .thenReturn(Optional.of(curso));
 
-        assertThatThrownBy(() -> cursoService.eliminar(curso.getId()))
+        assertThatThrownBy(() -> cursoService.eliminar(cursoId))
                 .isInstanceOf(AccessDeniedException.class);
 
         verify(cursoRepository, never()).delete(any(Curso.class));

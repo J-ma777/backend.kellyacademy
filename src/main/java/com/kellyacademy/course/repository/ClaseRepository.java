@@ -12,4 +12,6 @@ public interface ClaseRepository extends JpaRepository<Clase, UUID> {
     List<Clase> findBySemanaIdOrderByFechaHoraAsc(UUID semanaId);
 
     List<Clase> findByFechaHoraBetween(LocalDateTime inicio, LocalDateTime fin);
+
+    boolean existsBySemanaId(UUID semanaId);
 }

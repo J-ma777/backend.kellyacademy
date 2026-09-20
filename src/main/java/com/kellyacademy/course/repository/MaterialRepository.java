@@ -12,4 +12,6 @@ public interface MaterialRepository extends JpaRepository<Material, UUID> {
     List<Material> findBySemanaId(UUID semanaId);
 
     List<Material> findBySemanaIdAndTipo(UUID semanaId, TipoMaterial tipo);
+
+    boolean existsBySemanaId(UUID semanaId);
 }

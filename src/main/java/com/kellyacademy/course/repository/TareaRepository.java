@@ -14,4 +14,6 @@ public interface TareaRepository extends JpaRepository<Tarea, UUID> {
     List<Tarea> findByFechaLimiteBetween(LocalDateTime inicio, LocalDateTime fin);
 
     List<Tarea> findByFechaLimiteBefore(LocalDateTime fecha);
+
+    boolean existsBySemanaId(UUID semanaId);
 }

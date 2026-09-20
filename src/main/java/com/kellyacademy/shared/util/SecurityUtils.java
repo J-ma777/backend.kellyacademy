@@ -1,6 +1,7 @@
 package com.kellyacademy.shared.util;
 
 import com.kellyacademy.security.user.CustomUserDetails;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -40,5 +41,16 @@ public final class SecurityUtils {
 
     public static boolean esElMismoUsuario(UUID id) {
         return getUsuarioAutenticadoId().equals(id);
+    }
+
+    // Valida que el usuario autenticado sea ADMIN o el docente dueno del recurso.
+    // Centraliza la autorizacion fina que veniamos duplicando en cada servicio.
+    public static void validarDocenteDuenoOAdmin(UUID docenteId, String mensajeError) {
+        if (esAdmin()) {
+            return;
+        }
+        if (!docenteId.equals(getUsuarioAutenticadoId())) {
+            throw new AccessDeniedException(mensajeError);
+        }
     }
 }

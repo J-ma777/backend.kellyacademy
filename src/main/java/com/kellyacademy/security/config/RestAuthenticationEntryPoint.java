@@ -1,5 +1,6 @@
 package com.kellyacademy.security.config;
 
+import com.kellyacademy.shared.config.AppTime;
 import com.kellyacademy.shared.exception.ErrorResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,7 +42,7 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
                 .mensaje("Autenticacion requerida para acceder a este recurso")
                 .estado(HttpStatus.UNAUTHORIZED.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         response.setStatus(HttpStatus.UNAUTHORIZED.value());

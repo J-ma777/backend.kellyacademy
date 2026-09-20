@@ -1,6 +1,7 @@
 package com.kellyacademy.security.jwt;
 
 import com.kellyacademy.security.user.CustomUserDetailsService;
+import com.kellyacademy.shared.config.AppTime;
 import com.kellyacademy.shared.exception.ErrorResponse;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -132,7 +133,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 .mensaje(mensaje)
                 .estado(status.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         response.setStatus(status.value());

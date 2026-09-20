@@ -1,5 +1,6 @@
 package com.kellyacademy.shared.exception;
 
+import com.kellyacademy.shared.config.AppTime;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -37,7 +38,7 @@ public class GlobalExceptionHandler {
                 .mensaje(ex.getMessage())
                 .estado(HttpStatus.NOT_FOUND.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
@@ -56,7 +57,7 @@ public class GlobalExceptionHandler {
                 .mensaje(ex.getMessage())
                 .estado(HttpStatus.BAD_REQUEST.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
@@ -75,7 +76,7 @@ public class GlobalExceptionHandler {
                 .mensaje(ex.getMessage())
                 .estado(HttpStatus.CONFLICT.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
@@ -96,7 +97,7 @@ public class GlobalExceptionHandler {
                 .mensaje("La operacion viola una restriccion de integridad. Verifica los datos enviados o las dependencias existentes.")
                 .estado(HttpStatus.CONFLICT.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
@@ -125,7 +126,7 @@ public class GlobalExceptionHandler {
                 .mensaje("Error de validación en los datos enviados")
                 .estado(HttpStatus.BAD_REQUEST.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .detalles(errores)
                 .build();
 
@@ -147,7 +148,7 @@ public class GlobalExceptionHandler {
                 .mensaje("Correo o contraseña incorrectos")
                 .estado(HttpStatus.UNAUTHORIZED.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
@@ -166,7 +167,7 @@ public class GlobalExceptionHandler {
                 .mensaje("Tu cuenta está inactiva. Contacta al administrador.")
                 .estado(HttpStatus.FORBIDDEN.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -185,7 +186,7 @@ public class GlobalExceptionHandler {
                 .mensaje("Tu cuenta está bloqueada. Contacta al administrador.")
                 .estado(HttpStatus.FORBIDDEN.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -204,7 +205,7 @@ public class GlobalExceptionHandler {
                 .mensaje("No tienes permisos para acceder a este recurso")
                 .estado(HttpStatus.FORBIDDEN.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -225,7 +226,7 @@ public class GlobalExceptionHandler {
                 .mensaje("Ocurrió un error inesperado. Contacta al soporte.")
                 .estado(HttpStatus.INTERNAL_SERVER_ERROR.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);

@@ -2,6 +2,7 @@ package com.kellyacademy.shared.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -59,6 +60,46 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(CorreoYaRegistradoException.class)
+    public ResponseEntity<ErrorResponse> handleCorreoYaRegistrado(
+            CorreoYaRegistradoException ex,
+            HttpServletRequest request
+    ) {
+
+        log.warn("Correo ya registrado: {} - URI: {}", ex.getMessage(), request.getRequestURI());
+
+        ErrorResponse error = ErrorResponse.builder()
+                .codigo("CORREO_YA_REGISTRADO")
+                .mensaje(ex.getMessage())
+                .estado(HttpStatus.CONFLICT.value())
+                .ruta(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex,
+            HttpServletRequest request
+    ) {
+
+        // No exponemos el mensaje crudo de la DB (filtra nombres de constraints y columnas).
+        log.warn("Violacion de integridad de datos en URI {}: {}",
+                request.getRequestURI(), ex.getMostSpecificCause().getMessage());
+
+        ErrorResponse error = ErrorResponse.builder()
+                .codigo("DATA_INTEGRITY_VIOLATION")
+                .mensaje("La operacion viola una restriccion de integridad. Verifica los datos enviados o las dependencias existentes.")
+                .estado(HttpStatus.CONFLICT.value())
+                .ruta(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
     // EXCEPCIONES DE VALIDACIÓN

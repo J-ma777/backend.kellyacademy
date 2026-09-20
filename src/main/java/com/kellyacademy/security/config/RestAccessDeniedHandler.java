@@ -1,5 +1,6 @@
 package com.kellyacademy.security.config;
 
+import com.kellyacademy.shared.config.AppTime;
 import com.kellyacademy.shared.exception.ErrorResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,7 +42,7 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
                 .mensaje("No tienes permisos para acceder a este recurso")
                 .estado(HttpStatus.FORBIDDEN.value())
                 .ruta(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
                 .build();
 
         response.setStatus(HttpStatus.FORBIDDEN.value());

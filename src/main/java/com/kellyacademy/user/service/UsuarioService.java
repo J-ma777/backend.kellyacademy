@@ -35,6 +35,7 @@ public class UsuarioService {
     private final RolRepository rolRepository;
     private final UsuarioMapper usuarioMapper;
     private final PasswordEncoder passwordEncoder;
+    private static final String RECURSO = "Usuario";
 
     @Transactional(readOnly = true)
     public Page<UsuarioResumenResponse> listar(Pageable pageable) {
@@ -51,7 +52,7 @@ public class UsuarioService {
         }
 
         Usuario usuario = usuarioRepository.findWithRolesById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         return usuarioMapper.toResponse(usuario);
     }
@@ -84,7 +85,7 @@ public class UsuarioService {
         }
 
         Usuario usuario = usuarioRepository.findWithRolesById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         usuarioMapper.actualizarDesdeRequest(request, usuario);
 
@@ -102,7 +103,7 @@ public class UsuarioService {
         }
 
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         usuarioRepository.delete(usuario);
     }

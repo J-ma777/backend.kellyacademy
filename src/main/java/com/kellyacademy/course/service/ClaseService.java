@@ -28,6 +28,8 @@ public class ClaseService {
     private final ClaseRepository claseRepository;
     private final SemanaRepository semanaRepository;
     private final ClaseMapper claseMapper;
+    private static final String RECURSO = "Clase";
+    private static final String RECURSO_SEMANA = "Semana";
 
     @Transactional(readOnly = true)
     public List<ClaseResumenResponse> listar(UUID semanaId) {
@@ -38,7 +40,7 @@ public class ClaseService {
             );
         }
         if (!semanaRepository.existsById(semanaId)) {
-            throw new ResourceNotFoundException("Semana", "id", semanaId);
+            throw new ResourceNotFoundException(RECURSO_SEMANA, "id", semanaId);
         }
         return claseRepository.findBySemanaIdOrderByFechaHoraAsc(semanaId).stream()
                 .map(claseMapper::toResumenResponse)
@@ -48,14 +50,14 @@ public class ClaseService {
     @Transactional(readOnly = true)
     public ClaseResponse obtener(UUID id) {
         Clase clase = claseRepository.findWithSemanaCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Clase", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
         return claseMapper.toResponse(clase);
     }
 
     public ClaseResponse crear(CrearClaseRequest request) {
 
         Semana semana = semanaRepository.findWithUnidadCursoDocenteById(request.semanaId())
-                .orElseThrow(() -> new ResourceNotFoundException("Semana", "id", request.semanaId()));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_SEMANA, "id", request.semanaId()));
 
         validarAutorizacion(semana);
 
@@ -75,7 +77,7 @@ public class ClaseService {
     public ClaseResponse actualizar(UUID id, ActualizarClaseRequest request) {
 
         Clase clase = claseRepository.findWithSemanaCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Clase", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarAutorizacion(clase.getSemana());
 
@@ -90,7 +92,7 @@ public class ClaseService {
     public void eliminar(UUID id) {
 
         Clase clase = claseRepository.findWithSemanaCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Clase", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarAutorizacion(clase.getSemana());
 

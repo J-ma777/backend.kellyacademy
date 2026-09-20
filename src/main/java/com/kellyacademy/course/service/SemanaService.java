@@ -28,6 +28,9 @@ import java.util.UUID;
 @Transactional
 public class SemanaService {
 
+    private static final String RECURSO = "Semana";
+    private static final String RECURSO_UNIDAD = "Unidad";
+
     private final SemanaRepository semanaRepository;
     private final UnidadRepository unidadRepository;
     private final ClaseRepository claseRepository;
@@ -44,7 +47,7 @@ public class SemanaService {
             );
         }
         if (!unidadRepository.existsById(unidadId)) {
-            throw new ResourceNotFoundException("Unidad", "id", unidadId);
+            throw new ResourceNotFoundException(RECURSO_UNIDAD, "id", unidadId);
         }
         return semanaRepository.findByUnidadIdOrderByNumeroAsc(unidadId).stream()
                 .map(semanaMapper::toResumenResponse)
@@ -54,14 +57,14 @@ public class SemanaService {
     @Transactional(readOnly = true)
     public SemanaResponse obtener(UUID id) {
         Semana semana = semanaRepository.findWithUnidadCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Semana", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
         return semanaMapper.toResponse(semana);
     }
 
     public SemanaResponse crear(CrearSemanaRequest request) {
 
         Unidad unidad = unidadRepository.findWithCursoDocenteById(request.unidadId())
-                .orElseThrow(() -> new ResourceNotFoundException("Unidad", "id", request.unidadId()));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_UNIDAD, "id", request.unidadId()));
 
         validarPropietarioOAdmin(unidad);
 
@@ -86,7 +89,7 @@ public class SemanaService {
     public SemanaResponse actualizar(UUID id, ActualizarSemanaRequest request) {
 
         Semana semana = semanaRepository.findWithUnidadCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Semana", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarPropietarioOAdmin(semana.getUnidad());
 
@@ -98,7 +101,7 @@ public class SemanaService {
     public void eliminar(UUID id) {
 
         Semana semana = semanaRepository.findWithUnidadCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Semana", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarPropietarioOAdmin(semana.getUnidad());
 
@@ -121,7 +124,7 @@ public class SemanaService {
     public SemanaResponse marcarActual(UUID id) {
 
         Semana semana = semanaRepository.findWithUnidadCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Semana", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarPropietarioOAdmin(semana.getUnidad());
 

@@ -28,6 +28,8 @@ public class TareaService {
     private final TareaRepository tareaRepository;
     private final SemanaRepository semanaRepository;
     private final TareaMapper tareaMapper;
+    private static final String RECURSO = "Tarea";
+    private static final String RECURSO_SEMANA = "Semana";
 
     @Transactional(readOnly = true)
     public List<TareaResumenResponse> listar(UUID semanaId) {
@@ -38,7 +40,7 @@ public class TareaService {
             );
         }
         if (!semanaRepository.existsById(semanaId)) {
-            throw new ResourceNotFoundException("Semana", "id", semanaId);
+            throw new ResourceNotFoundException(RECURSO_SEMANA, "id", semanaId);
         }
         return tareaRepository.findBySemanaIdOrderByFechaLimiteAsc(semanaId).stream()
                 .map(tareaMapper::toResumenResponse)
@@ -48,14 +50,14 @@ public class TareaService {
     @Transactional(readOnly = true)
     public TareaResponse obtener(UUID id) {
         Tarea tarea = tareaRepository.findWithSemanaCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Tarea", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
         return tareaMapper.toResponse(tarea);
     }
 
     public TareaResponse crear(CrearTareaRequest request) {
 
         Semana semana = semanaRepository.findWithUnidadCursoDocenteById(request.semanaId())
-                .orElseThrow(() -> new ResourceNotFoundException("Semana", "id", request.semanaId()));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_SEMANA, "id", request.semanaId()));
 
         validarAutorizacion(semana);
 
@@ -74,7 +76,7 @@ public class TareaService {
     public TareaResponse actualizar(UUID id, ActualizarTareaRequest request) {
 
         Tarea tarea = tareaRepository.findWithSemanaCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Tarea", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarAutorizacion(tarea.getSemana());
 
@@ -88,7 +90,7 @@ public class TareaService {
     public void eliminar(UUID id) {
 
         Tarea tarea = tareaRepository.findWithSemanaCursoDocenteById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Tarea", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarAutorizacion(tarea.getSemana());
 

@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+*.iml
+.vscode
+.settings
+.project
+.classpath
+
+# Build
+target/
+
+# Entorno / secretos
+.env
+.env.*
+*.env
+application-local.properties
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Documentacion / misc
+*.md
+LICENSE
+
+# OS
+.DS_Store
+Thumbs.db

@@ -145,7 +145,7 @@ HELP.md
 # -----------------------------------------
 # Docker
 # -----------------------------------------
-.dockerignore
+#.dockerignore
 
 # -----------------------------------------
 # Documentacion local (no se versiona)

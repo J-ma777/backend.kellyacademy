@@ -25,13 +25,9 @@ cuando se resuelva, indicando el commit.
 | 28 | `Conversacion` unique constraint no normaliza orden de participantes — (A,B) y (B,A) son filas distintas. Mitigacion actual: servicio normaliza orden por UUID antes de crear. Solucion robusta: indice funcional Postgres con LEAST/GREATEST (requiere Testcontainers). | communication | FASE 6 | Pendiente |
 | 29 | Validar en servicio que ambos participantes de una `Conversacion` pertenezcan al `Curso` referenciado (docente del curso o estudiante matriculado). | communication | FASE 4 | Pendiente |
 | 30 | Validar en servicio que `otroParticipanteId != usuarioAutenticado.id` al crear conversacion. | communication | FASE 4 | Pendiente |
-| 31 | Endpoint dedicado `PATCH /anuncios/{id}/archivar` para cambiar `activo`. | communication | FASE 5 | Pendiente |
 | 32 | Endpoint dedicado `PATCH /mensajes/{id}/leer` y `PATCH /conversaciones/{id}/leer-todos` para marcar `leido`. | communication | FASE 5 | Pendiente |
 | 33 | Validar en servicio que el usuario autenticado sea participante de la `Conversacion` antes de insertar `Mensaje`. | communication | FASE 4 | Pendiente |
 | 34 | Endpoint dedicado `PATCH /conversaciones/{id}/asunto` si se necesita editar asunto post-creacion. | communication | FASE 5 | Pendiente |
-| 35 | Endpoint `PATCH /notificaciones/{id}/leer` y `PATCH /notificaciones/leer-todas` con validacion de que la notificacion pertenece al usuario autenticado. | communication | FASE 5 | Pendiente |
-| 36 | `NotificacionService.crear(...)` interno para que otros servicios (calificaciones, mensajes, anuncios) generen notificaciones. Sin endpoint publico de creacion. | communication | FASE 5 | Pendiente |
-| 37 | Endpoints `GET /notificaciones` y `GET /notificaciones/no-leidas` y `GET /notificaciones/count-no-leidas` filtrados por usuario autenticado. | communication | FASE 5 | Pendiente |
 | 38 | Validar en servicio que `Evento.fin > Evento.inicio` cuando `fin != null`. | calendar | FASE 4 | Pendiente |
 | 39 | Validar en servicio que `DisponibilidadTutoria.horaFin > horaInicio`. | calendar | FASE 4 | Pendiente |
 | 40 | Validar en servicio que no se solapen bloques de disponibilidad del mismo docente y dia. Requiere query de interseccion. | calendar | FASE 4 | Pendiente |
@@ -57,6 +53,8 @@ cuando se resuelva, indicando el commit.
 | 62 | `Asistencia.estado` no dispara `Notificacion` al estudiante cuando se registra AUSENTE / TARDE / JUSTIFICADO. Depende de #36. | attendance | FASE 5 | Pendiente |
 | 63 | No hay endpoint de registro masivo de asistencia por clase (`POST /api/asistencias/masivo` con lista de estudiantes). Hoy se registra uno por uno. | attendance | FASE 5 | Pendiente |
 | 64 | `IntegrationTestBase.limpiarTablas()` escala manualmente: cada entidad nueva requiere agregar su `deleteAll` en orden inverso a las FKs. Refactor a `TRUNCATE ... CASCADE` o limpieza dinamica basada en metadatos de Hibernate. | testing | FASE 5 | Pendiente |
+| 65 | Inconsistencia entre `Specifications`: `CursoSpecifications` y `NotificacionSpecifications` usan `Specification.unrestricted()` para match-all; `MatriculaSpecifications`, `EntregaSpecifications` y `AnuncioSpecifications` devuelven `null` en el predicado. Unificar convencion. | shared | FASE 5 | Pendiente |
+| 66 | `AnuncioService.crear` notifica a estudiantes matriculados uno por uno dentro de un mismo `@Transactional`. Con cursos grandes (>100 estudiantes) esto genera N inserts secuenciales. Considerar batch insert o job asincrono. | communication | FASE 6 | Pendiente |
 
 
 ## Resueltos
@@ -75,6 +73,11 @@ cuando se resuelva, indicando el commit.
 | 25 | `Entrega.estado` (PENDIENTE / TARDE) se calcula comparando `enviadoAt` con `Tarea.fechaLimite` en el servicio de creacion | PR #13 | 2026-09-20 |
 | 26 | Validar en servicio que `estudianteId` este matriculado en el curso de la `Clase` antes de registrar `Asistencia` | 1e443a8 | 2026-09-20 |
 | 27 | Validar en servicio que `claseId` corresponda a una clase ya impartida (`fechaHora <= now()`) antes de registrar asistencia | 1e443a8 | 2026-09-20 |
+| 31 | Endpoint dedicado `PATCH /anuncios/{id}/archivar` para cambiar `activo` | 66f364c | 2026-09-20 |
+| 35 | Endpoint `PATCH /notificaciones/{id}/leer` y `PATCH /notificaciones/leer-todas` con validacion de que la notificacion pertenece al usuario autenticado | 150ded9 | 2026-09-20 |
+| 36 | `NotificacionService.crear(...)` interno para que otros servicios generen notificaciones. Sin endpoint publico de creacion | 150ded9 | 2026-09-20 |
+| 37 | Endpoints `GET /notificaciones`, `GET /notificaciones/no-leidas` y `GET /notificaciones/count-no-leidas` filtrados por usuario autenticado | 150ded9 | 2026-09-20 |
+| 67 | `AnuncioService` no notifica al editar un anuncio (solo al crear). Decision de producto: ¿editar y re-notificar? | 66f364c | 2026-09-20 |
 | 52 | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |
 | 53 | Auditar mappers que accedan a `Usuario.roles` o `Rol.permisos` | a5887b1 | 2026-09-19 |
 
@@ -108,4 +111,8 @@ cuando se resuelva, indicando el commit.
 - `AsistenciaService.crear` valida `clase.fechaHora <= now()` con `AppTime.ZONA_NEGOCIO` (America/Lima). No usa `LocalDateTime.now()` sin zona para evitar divergencia con servidores en UTC.
 - `AsistenciaSpecifications` devuelve `Specification.unrestricted()` cuando el parametro es null, alineado con `CursoSpecifications` (no con `MatriculaSpecifications` / `EntregaSpecifications` que devuelven `null` en el predicado — inconsistencia preexistente de #65, ver Pendientes).
 - La autorizacion de `AsistenciaService` reutiliza `SecurityUtils.validarDocenteDuenoOAdmin`, consistente con el resto de features.
-- 
+- `Anuncio.activo` es soft-delete editable via `PATCH /anuncios/{id}/archivar`. No hay `PUT` para cambiar `activo`: alineado con la regla "estados administrativos por endpoint dedicado".
+- `AnuncioService.crear` notifica a estudiantes matriculados ACTIVOS en el curso, excluyendo al autor. Al editar no re-notifica: la edicion de un anuncio existente no debe generar ruido. Si en el futuro se requiere, se agrega un flag explicito al `ActualizarAnuncioRequest`.
+- `NotificacionService.validarUrl` acepta dos formatos de `link`: ruta relativa interna que empieza con `/` (ej. `/api/anuncios/<uuid>`, formato que usan los servicios internos) o URL absoluta con scheme + host. Rechaza texto suelto y URLs mal formadas.
+- `NotificacionService.crear(...)` es infraestructura pura: no valida auto-notificacion ni permisos. El llamador decide. `AnuncioService` excluye al autor; otros servicios haran lo propio.
+- `AnuncioService` no expone endpoint de creacion de `Notificacion`: las notificaciones se generan como efecto secundario de acciones de negocio (crear anuncio, enviar mensaje, calificar entrega).

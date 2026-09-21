@@ -79,7 +79,7 @@ cuando se resuelva, indicando el commit.
 | 46 | Validar en servicio que el usuario autenticado sea el estudiante, el docente o ADMIN al crear/modificar `Tutoria`. | a772ec6 | 2026-09-20 |
 | 49 | Validar en servicio que `RecursoBiblioteca` tenga al menos `urlArchivo` o `urlExterno`. Sin ninguna URL el recurso no es descargable. | 8ca397b | 2026-09-20 |
 | 51 | Validar en servicio que `urlExterno` tenga formato de URL valido (no solo longitud). | 8ca397b | 2026-09-20 |
-| 52 | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |
+| 52 | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |falta 
 | 53 | Auditar mappers que accedan a `Usuario.roles` o `Rol.permisos` | a5887b1 | 2026-09-19 |
 | 67 | `AnuncioService` no notifica al editar un anuncio (solo al crear). Decision de producto: ¿editar y re-notificar? | 66f364c | 2026-09-20 |
 

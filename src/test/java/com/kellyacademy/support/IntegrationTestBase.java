@@ -20,6 +20,7 @@ import com.kellyacademy.user.enums.PermisoSistema;
 import com.kellyacademy.user.repository.PermisoRepository;
 import com.kellyacademy.user.repository.RolRepository;
 import com.kellyacademy.user.repository.UsuarioRepository;
+import com.kellyacademy.attendance.repository.AsistenciaRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,6 +70,7 @@ public abstract class IntegrationTestBase {
     @Autowired protected TareaRepository tareaRepository;
     @Autowired protected MatriculaRepository matriculaRepository;
     @Autowired protected EntregaRepository entregaRepository;
+    @Autowired protected AsistenciaRepository asistenciaRepository;
 
     // IDs y tokens utiles para los tests hijos.
     protected UUID adminId;
@@ -275,6 +277,7 @@ public abstract class IntegrationTestBase {
 
     protected void limpiarTablas() {
         // Orden inverso a las FKs: hijos primero.
+        asistenciaRepository.deleteAll();
         entregaRepository.deleteAll();
         matriculaRepository.deleteAll();
         tareaRepository.deleteAll();

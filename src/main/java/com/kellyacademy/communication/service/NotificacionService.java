@@ -175,6 +175,17 @@ public class NotificacionService {
     // -------- helpers --------
 
     private void validarUrl(String url) {
+        // Acepta dos formatos validos para "link":
+        // 1) Ruta relativa interna que empieza con "/" (ej. /api/anuncios/<uuid>).
+        //    Es el formato que usan los servicios internos al crear notificaciones.
+        // 2) URL absoluta (http://, https://...) con scheme + host.
+        // Rechaza cualquier otro formato (texto suelto, espacios, scheme sin host).
+        if (url.startsWith("/")) {
+            if (url.contains(" ") || url.contains("\t") || url.contains("\n")) {
+                throw new BusinessException("URL_INVALIDA", "La ruta del link no es valida.");
+            }
+            return;
+        }
         try {
             URI uri = new URI(url);
             if (uri.getScheme() == null || uri.getHost() == null) {

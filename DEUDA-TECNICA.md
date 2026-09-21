@@ -23,10 +23,6 @@ cuando se resuelva, indicando el commit.
 | 22 | Endpoint administrativo para cambiar `estado` de `Matricula` (maquina de estados: ACTIVA -> COMPLETADA / RIESGO / ABANDONADA) | enrollment | FASE 5 | Pendiente |
 | 23 | Calculo automatico de `notaFinal` y `asistenciaPorcentaje` de `Matricula` a partir de entregas y asistencias | enrollment | FASE 6 | Pendiente |
 | 28 | `Conversacion` unique constraint no normaliza orden de participantes — (A,B) y (B,A) son filas distintas. Mitigacion actual: servicio normaliza orden por UUID antes de crear. Solucion robusta: indice funcional Postgres con LEAST/GREATEST (requiere Testcontainers). | communication | FASE 6 | Pendiente |
-| 29 | Validar en servicio que ambos participantes de una `Conversacion` pertenezcan al `Curso` referenciado (docente del curso o estudiante matriculado). | communication | FASE 4 | Pendiente |
-| 30 | Validar en servicio que `otroParticipanteId != usuarioAutenticado.id` al crear conversacion. | communication | FASE 4 | Pendiente |
-| 32 | Endpoint dedicado `PATCH /mensajes/{id}/leer` y `PATCH /conversaciones/{id}/leer-todos` para marcar `leido`. | communication | FASE 5 | Pendiente |
-| 33 | Validar en servicio que el usuario autenticado sea participante de la `Conversacion` antes de insertar `Mensaje`. | communication | FASE 4 | Pendiente |
 | 34 | Endpoint dedicado `PATCH /conversaciones/{id}/asunto` si se necesita editar asunto post-creacion. | communication | FASE 5 | Pendiente |
 | 38 | Validar en servicio que `Evento.fin > Evento.inicio` cuando `fin != null`. | calendar | FASE 4 | Pendiente |
 | 39 | Validar en servicio que `DisponibilidadTutoria.horaFin > horaInicio`. | calendar | FASE 4 | Pendiente |
@@ -55,14 +51,16 @@ cuando se resuelva, indicando el commit.
 | 64 | `IntegrationTestBase.limpiarTablas()` escala manualmente: cada entidad nueva requiere agregar su `deleteAll` en orden inverso a las FKs. Refactor a `TRUNCATE ... CASCADE` o limpieza dinamica basada en metadatos de Hibernate. | testing | FASE 5 | Pendiente |
 | 65 | Inconsistencia entre `Specifications`: `CursoSpecifications` y `NotificacionSpecifications` usan `Specification.unrestricted()` para match-all; `MatriculaSpecifications`, `EntregaSpecifications` y `AnuncioSpecifications` devuelven `null` en el predicado. Unificar convencion. | shared | FASE 5 | Pendiente |
 | 66 | `AnuncioService.crear` notifica a estudiantes matriculados uno por uno dentro de un mismo `@Transactional`. Con cursos grandes (>100 estudiantes) esto genera N inserts secuenciales. Considerar batch insert o job asincrono. | communication | FASE 6 | Pendiente |
+| 67 | `ConversacionRepository.findByCursoIsNullAndParticipante1IdAndParticipante2Id` no está cubierto por índice único funcional (solo el caso con curso). Dos hilos concurrentes podrían crear conversaciones duplicadas sin curso. Mitigación actual: el servicio normaliza orden. Solución robusta: índice funcional Postgres con LEAST/GREATEST + `curso_id NULLS NOT DISTINCT`. Requiere Testcontainers. | communication | FASE 6 | Pendiente |
+| 68 | `MensajeController.listar` pagina mensajes con sort `enviadoAt` ascendente. Conversaciones largas obligan al cliente a paginar hacia adelante. Considerar endpoint alternativo de "últimos N mensajes" para carga inicial del chat. | communication | FASE 5 | Pendiente |
 
 
 ## Resueltos
 
-| # | Deuda | Commit | Fecha |
-|---|---|---|---|
-| 1 | `Usuario.roles` con `FetchType.EAGER` — riesgo N+1 en listados paginados | refactor/user-lazy-fetching | 2026-09-18 |
-| 2 | `Rol.permisos` con `FetchType.EAGER` — agrava el punto 1 | refactor/user-lazy-fetching | 2026-09-18 |
+| #  | Deuda | Commit | Fecha |
+|----|---|---|---|
+| 1  | `Usuario.roles` con `FetchType.EAGER` — riesgo N+1 en listados paginados | refactor/user-lazy-fetching | 2026-09-18 |
+| 2  | `Rol.permisos` con `FetchType.EAGER` — agrava el punto 1 | refactor/user-lazy-fetching | 2026-09-18 |
 | 10 | RolResponse anida permisos — revisar cuando Rol.permisos pase a LAZY | a5887b1 | 2026-09-19 |
 | 11 | `CursoResponse` embebe `UsuarioResumenResponse` — dispara EAGER de `Usuario.roles` y `Rol.permisos` | e459b96 | 2026-09-19 |
 | 14 | Validar que `docenteId` tenga rol DOCENTE antes de asignarlo a un curso | e459b96 | 2026-09-19 |
@@ -73,7 +71,11 @@ cuando se resuelva, indicando el commit.
 | 25 | `Entrega.estado` (PENDIENTE / TARDE) se calcula comparando `enviadoAt` con `Tarea.fechaLimite` en el servicio de creacion | PR #13 | 2026-09-20 |
 | 26 | Validar en servicio que `estudianteId` este matriculado en el curso de la `Clase` antes de registrar `Asistencia` | 1e443a8 | 2026-09-20 |
 | 27 | Validar en servicio que `claseId` corresponda a una clase ya impartida (`fechaHora <= now()`) antes de registrar asistencia | 1e443a8 | 2026-09-20 |
+| 29 | Validar en servicio que ambos participantes de una `Conversacion` pertenezcan al `Curso` referenciado (docente del curso o estudiante matriculado) | 11004db | 2026-09-20 |
+| 30 | Validar en servicio que `otroParticipanteId != usuarioAutenticado.id` al crear conversacion | 11004db | 2026-09-20 |
 | 31 | Endpoint dedicado `PATCH /anuncios/{id}/archivar` para cambiar `activo` | 66f364c | 2026-09-20 |
+| 32 | Endpoint dedicado `PATCH /mensajes/{id}/leer` y `PATCH /conversaciones/{id}/leer-todos` para marcar `leido`. Nota: la ruta real quedo como `PATCH /conversaciones/{cid}/mensajes/{mid}/leer` para mantener consistencia REST anidada | 11004db | 2026-09-20 |
+| 33 | Validar en servicio que el usuario autenticado sea participante de la `Conversacion` antes de insertar `Mensaje` | 11004db | 2026-09-20 |
 | 35 | Endpoint `PATCH /notificaciones/{id}/leer` y `PATCH /notificaciones/leer-todas` con validacion de que la notificacion pertenece al usuario autenticado | 150ded9 | 2026-09-20 |
 | 36 | `NotificacionService.crear(...)` interno para que otros servicios generen notificaciones. Sin endpoint publico de creacion | 150ded9 | 2026-09-20 |
 | 37 | Endpoints `GET /notificaciones`, `GET /notificaciones/no-leidas` y `GET /notificaciones/count-no-leidas` filtrados por usuario autenticado | 150ded9 | 2026-09-20 |
@@ -116,3 +118,9 @@ cuando se resuelva, indicando el commit.
 - `NotificacionService.validarUrl` acepta dos formatos de `link`: ruta relativa interna que empieza con `/` (ej. `/api/anuncios/<uuid>`, formato que usan los servicios internos) o URL absoluta con scheme + host. Rechaza texto suelto y URLs mal formadas.
 - `NotificacionService.crear(...)` es infraestructura pura: no valida auto-notificacion ni permisos. El llamador decide. `AnuncioService` excluye al autor; otros servicios haran lo propio.
 - `AnuncioService` no expone endpoint de creacion de `Notificacion`: las notificaciones se generan como efecto secundario de acciones de negocio (crear anuncio, enviar mensaje, calificar entrega).
+- - `ConversacionService.crear` es idempotente: si ya existe una conversacion con los mismos participantes (y mismo curso, o ambos sin curso), retorna la existente. El frontend puede llamar sin miedo a duplicar.
+- `ConversacionService.crear` normaliza el orden de participantes por UUID (`p1.id < p2.id`). Esto evita duplicados (A,B) vs (B,A). Mitigacion en servicio de la deuda #28; solucion robusta (indice funcional) queda para FASE 6 con Testcontainers (#67).
+- `ConversacionService` valida "pertenece al curso" asi: docente dueno del curso o estudiante con matricula ACTIVA. No basta con estar matriculado (puede estar ABANDONADA/RIESGO/COMPLETADA). Reutiliza `MatriculaRepository.findByCursoIdAndEstudianteId` y compara estado en servicio.
+- `MensajeService.crear` actualiza `Conversacion.ultimoMensajeAt` con la misma marca temporal del mensaje (`enviadoAt`). No hay update asincrono: se hace en la misma transaccion para evitar race conditions.
+- `MensajeService.crear` notifica al otro participante via `NotificacionService.crear` con tipo `MENSAJE`. NO notifica al remitente. Si la conversacion tiene un solo participante (caso imposible por validacion de auto-conversacion), no notifica.
+- `Mensaje` no se edita ni se borra por el usuario. Solo ADMIN puede eliminar. Alineado con la decision de `Notificacion`: el mensaje es un registro de comunicacion, no un campo mutable.

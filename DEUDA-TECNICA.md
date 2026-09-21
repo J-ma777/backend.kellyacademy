@@ -22,8 +22,6 @@ cuando se resuelva, indicando el commit.
 | 21 | Endpoint `PATCH /entregas/{id}/calificar` — setea `nota`, `retroalimentacion` y pasa `estado` a `CALIFICADA` con validacion de puntaje maximo de la `Tarea` | enrollment | FASE 5 | Pendiente |
 | 22 | Endpoint administrativo para cambiar `estado` de `Matricula` (maquina de estados: ACTIVA -> COMPLETADA / RIESGO / ABANDONADA) | enrollment | FASE 5 | Pendiente |
 | 23 | Calculo automatico de `notaFinal` y `asistenciaPorcentaje` de `Matricula` a partir de entregas y asistencias | enrollment | FASE 6 | Pendiente |
-| 26 | Validar en servicio que `estudianteId` este matriculado en el curso de la `Clase` antes de registrar `Asistencia` | attendance | FASE 4 | Pendiente |
-| 27 | Validar en servicio que `claseId` corresponda a una clase ya impartida (`fechaHora <= now()`) antes de registrar asistencia | attendance | FASE 4 | Pendiente |
 | 28 | `Conversacion` unique constraint no normaliza orden de participantes — (A,B) y (B,A) son filas distintas. Mitigacion actual: servicio normaliza orden por UUID antes de crear. Solucion robusta: indice funcional Postgres con LEAST/GREATEST (requiere Testcontainers). | communication | FASE 6 | Pendiente |
 | 29 | Validar en servicio que ambos participantes de una `Conversacion` pertenezcan al `Curso` referenciado (docente del curso o estudiante matriculado). | communication | FASE 4 | Pendiente |
 | 30 | Validar en servicio que `otroParticipanteId != usuarioAutenticado.id` al crear conversacion. | communication | FASE 4 | Pendiente |
@@ -55,6 +53,10 @@ cuando se resuelva, indicando el commit.
 | 58 | `Entrega` no distingue "asignacion del docente" de "envio del estudiante". Hoy se mezclan en un mismo registro (`enviadoAt` + `urlArchivo`). Si el dominio requiere separar los dos eventos (Submission con historial de intentos), FASE 6+. | enrollment | FASE 6 | Pendiente |
 | 59 | `EntregaService.eliminar` (ADMIN) no valida que la entrega no este `CALIFICADA`. Borrar una entrega calificada deja inconsistente el `notaFinal` futuro de la `Matricula`. | enrollment | FASE 5 | Pendiente |
 | 60 | `CrearEntregaRequest.urlArchivo` es `@NotBlank`. No permite pre-asignar tareas sin archivo inicial. Relajar a `@Nullable` + endpoint separado de subida cuando se implemente el flujo "docente asigna tarea sin archivo, estudiante sube despues". | enrollment | FASE 5 | Pendiente |
+| 61 | `Clase.fechaHora` nullable impide aplicar la validacion `CLASE_NO_IMPARTIDA` (#27) a clases sin fecha. Requiere decidir si `fechaHora` pasa a obligatoria o si se modela "clase impartida" con un flag explicito. | attendance | FASE 5 | Pendiente |
+| 62 | `Asistencia.estado` no dispara `Notificacion` al estudiante cuando se registra AUSENTE / TARDE / JUSTIFICADO. Depende de #36. | attendance | FASE 5 | Pendiente |
+| 63 | No hay endpoint de registro masivo de asistencia por clase (`POST /api/asistencias/masivo` con lista de estudiantes). Hoy se registra uno por uno. | attendance | FASE 5 | Pendiente |
+| 64 | `IntegrationTestBase.limpiarTablas()` escala manualmente: cada entidad nueva requiere agregar su `deleteAll` en orden inverso a las FKs. Refactor a `TRUNCATE ... CASCADE` o limpieza dinamica basada en metadatos de Hibernate. | testing | FASE 5 | Pendiente |
 
 
 ## Resueltos
@@ -71,6 +73,8 @@ cuando se resuelva, indicando el commit.
 | 18 | `Clase.urlVivo` y `urlGrabacion` — no hay validacion de formato de URL (solo longitud) | PR #6 | 2026-09-20 |
 | 24 | Validar en servicio que no se pueda re-subir archivo de `Entrega` si `estado = CALIFICADA` | PR #13 | 2026-09-20 |
 | 25 | `Entrega.estado` (PENDIENTE / TARDE) se calcula comparando `enviadoAt` con `Tarea.fechaLimite` en el servicio de creacion | PR #13 | 2026-09-20 |
+| 26 | Validar en servicio que `estudianteId` este matriculado en el curso de la `Clase` antes de registrar `Asistencia` | 1e443a8 | 2026-09-20 |
+| 27 | Validar en servicio que `claseId` corresponda a una clase ya impartida (`fechaHora <= now()`) antes de registrar asistencia | 1e443a8 | 2026-09-20 |
 | 52 | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |
 | 53 | Auditar mappers que accedan a `Usuario.roles` o `Rol.permisos` | a5887b1 | 2026-09-19 |
 
@@ -100,3 +104,8 @@ cuando se resuelva, indicando el commit.
 - El archivo `.env` de desarrollo local se carga via `spring.config.import=optional:file:./.env[.properties]` en `application-dev.properties`. El prefijo `optional:` evita fallo en produccion, donde las variables vienen del orquestador y `.env` no existe.
 - `spring.profiles.active=${SPRING_PROFILES_ACTIVE:dev}` en `application.properties`: produccion debe definir `SPRING_PROFILES_ACTIVE=prod` desde el orquestador. El default `dev` es solo para arranque local.
 - Los mappers que acceden a colecciones LAZY (`UsuarioMapper.toResponse` lee `Usuario.roles`, `RolMapper.toResponse` lee `Rol.permisos`) se invocan **exclusivamente** desde servicios `@Transactional(readOnly = true)` con entidades cargadas via `@EntityGraph` explicito (`UsuarioRepository.findWithRolesById`, `RolRepository.findWithPermisosById`). Nunca se invocan desde controllers ni desde metodos fuera de transaccion. Esta es la regla que cierra las deudas #10, #52 y #53.
+- `Asistencia` no expone endpoint `PATCH` de estado. El `PUT` cubre la correccion de asistencia porque `estado` es dato operativo editable (docente corrige), no campo administrativo. Alineado con la decision de `Matricula` (sin PUT) y `Entrega` (PUT limitado a `urlArchivo`).
+- `AsistenciaService.crear` valida `clase.fechaHora <= now()` con `AppTime.ZONA_NEGOCIO` (America/Lima). No usa `LocalDateTime.now()` sin zona para evitar divergencia con servidores en UTC.
+- `AsistenciaSpecifications` devuelve `Specification.unrestricted()` cuando el parametro es null, alineado con `CursoSpecifications` (no con `MatriculaSpecifications` / `EntregaSpecifications` que devuelven `null` en el predicado — inconsistencia preexistente de #65, ver Pendientes).
+- La autorizacion de `AsistenciaService` reutiliza `SecurityUtils.validarDocenteDuenoOAdmin`, consistente con el resto de features.
+- 

@@ -24,13 +24,7 @@ cuando se resuelva, indicando el commit.
 | 23 | Calculo automatico de `notaFinal` y `asistenciaPorcentaje` de `Matricula` a partir de entregas y asistencias | enrollment | FASE 6 | Pendiente |
 | 28 | `Conversacion` unique constraint no normaliza orden de participantes — (A,B) y (B,A) son filas distintas. Mitigacion actual: servicio normaliza orden por UUID antes de crear. Solucion robusta: indice funcional Postgres con LEAST/GREATEST (requiere Testcontainers). | communication | FASE 6 | Pendiente |
 | 34 | Endpoint dedicado `PATCH /conversaciones/{id}/asunto` si se necesita editar asunto post-creacion. | communication | FASE 5 | Pendiente |
-| 39 | Validar en servicio que `DisponibilidadTutoria.horaFin > horaInicio`. | calendar | FASE 4 | Pendiente |
-| 40 | Validar en servicio que no se solapen bloques de disponibilidad del mismo docente y dia. Requiere query de interseccion. | calendar | FASE 4 | Pendiente |
-| 41 | Validar en servicio que el usuario autenticado sea el docente dueno o ADMIN al crear/modificar `DisponibilidadTutoria`. | calendar | FASE 4 | Pendiente |
 | 43 | Endpoint `PATCH /tutorias/{id}/estado` con validacion de transiciones (PENDIENTE -> CONFIRMADA / CANCELADA; CONFIRMADA -> COMPLETADA / CANCELADA; COMPLETADA y CANCELADA terminales). | calendar | FASE 5 | Pendiente |
-| 44 | Validar en servicio que `fecha` y `duracionMinutos` de `Tutoria` solo sean editables cuando `estado = PENDIENTE`. | calendar | FASE 4 | Pendiente |
-| 45 | Validar en servicio que `Tutoria.fecha > now()` al crear. | calendar | FASE 4 | Pendiente |
-| 46 | Validar en servicio que el usuario autenticado sea el estudiante, el docente o ADMIN al crear/modificar `Tutoria`. | calendar | FASE 4 | Pendiente |
 | 47 | Validar en servicio que el docente tenga disponibilidad (`DisponibilidadTutoria`) en el bloque solicitado al crear `Tutoria`. Requiere cruzar `DayOfWeek` + rango horario. | calendar | FASE 6 | Pendiente |
 | 48 | Validar en servicio que no exista solapamiento con otras tutorias CONFIRMADAS del mismo docente o estudiante. | calendar | FASE 6 | Pendiente |
 | 49 | Validar en servicio que `RecursoBiblioteca` tenga al menos `urlArchivo` o `urlExterno`. Sin ninguna URL el recurso no es descargable. | library | FASE 4 | Pendiente |
@@ -78,7 +72,13 @@ cuando se resuelva, indicando el commit.
 | 36 | `NotificacionService.crear(...)` interno para que otros servicios generen notificaciones. Sin endpoint publico de creacion | 150ded9 | 2026-09-20 |
 | 37 | Endpoints `GET /notificaciones`, `GET /notificaciones/no-leidas` y `GET /notificaciones/count-no-leidas` filtrados por usuario autenticado | 150ded9 | 2026-09-20 |
 | 38 | Validar en servicio que `Evento.fin > Evento.inicio` cuando `fin != null`. | ca9084f | 2026-09-20 |
+| 39 | Validar en servicio que `DisponibilidadTutoria.horaFin > horaInicio`. | 5d7739f | 2026-09-20 |
+| 40 | Validar en servicio que no se solapen bloques de disponibilidad del mismo docente y dia. Requiere query de interseccion. | 5d7739f | 2026-09-20 |
+| 41 | Validar en servicio que el usuario autenticado sea el docente dueno o ADMIN al crear/modificar `DisponibilidadTutoria`. | 5d7739f | 2026-09-20 |
 | 42 | Validar en servicio que al crear `Evento`, si `cursoId != null`, el usuario pertenezca al curso (docente o estudiante matriculado). | ca9084f | 2026-09-20 |
+| 44 | Validar en servicio que `fecha` y `duracionMinutos` de `Tutoria` solo sean editables cuando `estado = PENDIENTE`. | a772ec6 | 2026-09-20 |
+| 45 | Validar en servicio que `Tutoria.fecha > now()` al crear. | a772ec6 | 2026-09-20 |
+| 46 | Validar en servicio que el usuario autenticado sea el estudiante, el docente o ADMIN al crear/modificar `Tutoria`. | a772ec6 | 2026-09-20 |
 | 67 | `AnuncioService` no notifica al editar un anuncio (solo al crear). Decision de producto: ¿editar y re-notificar? | 66f364c | 2026-09-20 |
 | 52 | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |
 | 53 | Auditar mappers que accedan a `Usuario.roles` o `Rol.permisos` | a5887b1 | 2026-09-19 |

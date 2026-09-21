@@ -30,6 +30,13 @@ public interface MatriculaRepository extends
 
     List<Matricula> findByCursoIdAndEstado(UUID cursoId, EstadoMatricula estado);
 
+    @EntityGraph(attributePaths = {"estudiante"})
+    @Query("SELECT m FROM Matricula m WHERE m.curso.id = :cursoId AND m.estado = :estado")
+    List<Matricula> findWithEstudianteByCursoIdAndEstado(
+            @Param("cursoId") UUID cursoId,
+            @Param("estado") EstadoMatricula estado
+    );
+
     // Cuenta matriculas activas del curso. Se usa para validar cupo disponible
     // contra Curso.capacidadMaxima.
     long countByCursoIdAndEstado(UUID cursoId, EstadoMatricula estado);

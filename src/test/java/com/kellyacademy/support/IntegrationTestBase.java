@@ -28,6 +28,7 @@ import com.kellyacademy.communication.repository.MensajeRepository;
 import com.kellyacademy.calendar.repository.DisponibilidadTutoriaRepository;
 import com.kellyacademy.calendar.repository.EventoRepository;
 import com.kellyacademy.calendar.repository.TutoriaRepository;
+import com.kellyacademy.library.repository.RecursoBibliotecaRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,6 +86,7 @@ public abstract class IntegrationTestBase {
     @Autowired protected EventoRepository eventoRepository;
     @Autowired protected DisponibilidadTutoriaRepository disponibilidadTutoriaRepository;
     @Autowired protected TutoriaRepository tutoriaRepository;
+    @Autowired protected RecursoBibliotecaRepository recursoBibliotecaRepository;
 
     // IDs y tokens utiles para los tests hijos.
     protected UUID adminId;
@@ -291,6 +293,7 @@ public abstract class IntegrationTestBase {
 
     protected void limpiarTablas() {
         // Orden inverso a las FKs: hijos primero.
+        recursoBibliotecaRepository.deleteAll();
         tutoriaRepository.deleteAll();
         disponibilidadTutoriaRepository.deleteAll();
         eventoRepository.deleteAll();

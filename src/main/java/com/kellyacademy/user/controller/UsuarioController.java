@@ -1,6 +1,7 @@
 package com.kellyacademy.user.controller;
 
 import com.kellyacademy.user.dto.request.ActualizarUsuarioRequest;
+import com.kellyacademy.user.dto.request.CambiarEstadoUsuarioRequest;
 import com.kellyacademy.user.dto.request.CrearUsuarioRequest;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
 import com.kellyacademy.user.dto.response.UsuarioResumenResponse;
@@ -13,14 +14,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
@@ -61,6 +55,15 @@ public class UsuarioController {
             @Valid @RequestBody ActualizarUsuarioRequest request
     ) {
         return ResponseEntity.ok(usuarioService.actualizar(id, request));
+    }
+
+    @PatchMapping("/{id}/estado")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<UsuarioResponse> cambiarEstado(
+            @PathVariable UUID id,
+            @Valid @RequestBody CambiarEstadoUsuarioRequest request
+    ) {
+        return ResponseEntity.ok(usuarioService.cambiarEstado(id, request.estado()));
     }
 
     @DeleteMapping("/{id}")

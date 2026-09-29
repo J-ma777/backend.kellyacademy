@@ -243,4 +243,83 @@ class UsuarioServiceTest {
 
         verify(usuarioRepository, never()).delete(any());
     }
+
+    // ------------------------------------------------------------------
+    // cambiarEstado
+    // ------------------------------------------------------------------
+
+    @Test
+    void cambiarEstado_aSiMismo_lanzaBusinessException() {
+
+        autenticarComo(usuarioAutenticadoId, "ADMINISTRADOR");
+
+        assertThatThrownBy(() ->
+                usuarioService.cambiarEstado(usuarioAutenticadoId, EstadoUsuario.INACTIVO))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("NO_PUEDE_AUTOCAMBIAR_ESTADO");
+                    assertThat(ex.getMessage()).contains("no puede cambiar su propio estado");
+                });
+
+        verify(usuarioRepository, never()).findWithRolesById(any());
+    }
+
+    @Test
+    void cambiarEstado_mismoEstado_lanzaBusinessException() {
+
+        // Autenticamos como admin distinto al objetivo.
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = new Usuario();
+        objetivo.setId(objetivoId);
+        objetivo.setEstado(EstadoUsuario.ACTIVO);
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+
+        assertThatThrownBy(() ->
+                usuarioService.cambiarEstado(objetivoId, EstadoUsuario.ACTIVO))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ESTADO_SIN_CAMBIOS");
+                    assertThat(ex.getMessage()).contains("ACTIVO");
+                });
+    }
+
+    @Test
+    void cambiarEstado_exitoso_actualizaYDevuelveResponse() {
+
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = new Usuario();
+        objetivo.setId(objetivoId);
+        objetivo.setNombre("Juan");
+        objetivo.setApellido("Perez");
+        objetivo.setCorreoElectronico("juan@kelly.com");
+        objetivo.setEstado(EstadoUsuario.ACTIVO);
+
+        UsuarioResponse responseEsperado = new UsuarioResponse(
+                objetivoId,
+                "Juan",
+                "Perez",
+                "juan@kelly.com",
+                null,
+                EstadoUsuario.BLOQUEADO,
+                java.util.List.of("ESTUDIANTE"),
+                null,
+                null
+        );
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(usuarioMapper.toResponse(objetivo)).thenReturn(responseEsperado);
+
+        UsuarioResponse resultado = usuarioService.cambiarEstado(
+                objetivoId, EstadoUsuario.BLOQUEADO);
+
+        assertThat(resultado.estado()).isEqualTo(EstadoUsuario.BLOQUEADO);
+        assertThat(objetivo.getEstado()).isEqualTo(EstadoUsuario.BLOQUEADO);
+
+        verify(usuarioRepository, never()).save(any());
+    }
 }

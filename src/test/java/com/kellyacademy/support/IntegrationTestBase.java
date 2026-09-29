@@ -29,6 +29,10 @@ import com.kellyacademy.calendar.repository.DisponibilidadTutoriaRepository;
 import com.kellyacademy.calendar.repository.EventoRepository;
 import com.kellyacademy.calendar.repository.TutoriaRepository;
 import com.kellyacademy.library.repository.RecursoBibliotecaRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.PersistenceUnitUtil;
+import jakarta.persistence.metamodel.EntityType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +46,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -56,7 +61,8 @@ import java.util.stream.Collectors;
  * El seeder esta deshabilitado en test, asi que esta clase siembra los datos
  * minimos (permisos, roles, admin, 2 docentes) por repositorio antes de cada test.
  *
- * Limpieza en @AfterEach: borra las tablas en orden inverso a las FKs.
+ * Limpieza en @BeforeEach y @AfterEach: TRUNCATE ... CASCADE descubierto por
+ * metamodelo de Hibernate. Ya no hay que tocar esta clase al agregar entidades.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
@@ -87,6 +93,8 @@ public abstract class IntegrationTestBase {
     @Autowired protected DisponibilidadTutoriaRepository disponibilidadTutoriaRepository;
     @Autowired protected TutoriaRepository tutoriaRepository;
     @Autowired protected RecursoBibliotecaRepository recursoBibliotecaRepository;
+
+    @Autowired private EntityManagerFactory entityManagerFactory;
 
     // IDs y tokens utiles para los tests hijos.
     protected UUID adminId;
@@ -291,27 +299,86 @@ public abstract class IntegrationTestBase {
     // LIMPIEZA
     // ------------------------------------------------------------------------
 
+    /**
+     * Limpia todas las tablas de negocio descubiertas por el metamodelo de Hibernate.
+     *
+     * Estrategia: TRUNCATE TABLE <tabla> CASCADE. Al usar CASCADE, el orden de las
+     * tablas deja de importar (H2 en MODE=PostgreSQL lo soporta). Esto elimina la
+     * necesidad de mantener manualmente el orden inverso a las FKs cada vez que se
+     * agrega una entidad nueva.
+     *
+     * Excluye flyway_schema_history (no aplica en test, pero por robustez si algun
+     * dia se habilita Flyway en test).
+     */
     protected void limpiarTablas() {
-        // Orden inverso a las FKs: hijos primero.
-        recursoBibliotecaRepository.deleteAll();
-        tutoriaRepository.deleteAll();
-        disponibilidadTutoriaRepository.deleteAll();
-        eventoRepository.deleteAll();
-        mensajeRepository.deleteAll();
-        conversacionRepository.deleteAll();
-        anuncioRepository.deleteAll();
-        notificacionRepository.deleteAll();
-        asistenciaRepository.deleteAll();
-        entregaRepository.deleteAll();
-        matriculaRepository.deleteAll();
-        tareaRepository.deleteAll();
-        materialRepository.deleteAll();
-        claseRepository.deleteAll();
-        semanaRepository.deleteAll();
-        unidadRepository.deleteAll();
-        cursoRepository.deleteAll();
-        usuarioRepository.deleteAll();
-        rolRepository.deleteAll();
-        permisoRepository.deleteAll();
+        EntityManager em = entityManagerFactory.createEntityManager();
+        try {
+            em.getTransaction().begin();
+
+            // H2 no soporta TRUNCATE ... CASCADE. Se desactivan las FKs temporalmente
+            // para poder truncar en cualquier orden, y se restauran al final.
+            em.createNativeQuery("SET REFERENTIAL_INTEGRITY FALSE").executeUpdate();
+
+            Set<String> tablas = descubrirTablasDeNegocio();
+            for (String tabla : tablas) {
+                em.createNativeQuery("TRUNCATE TABLE " + tabla).executeUpdate();
+            }
+
+            em.createNativeQuery("SET REFERENTIAL_INTEGRITY TRUE").executeUpdate();
+
+            em.getTransaction().commit();
+        } catch (RuntimeException ex) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            throw ex;
+        } finally {
+            em.close();
+        }
+    }
+
+    /**
+     * Descubre los nombres fisicos de tabla de todas las entidades JPA registradas.
+     * Filtra tablas de infraestructura (Flyway) que no deben tocarse.
+     */
+    private Set<String> descubrirTablasDeNegocio() {
+        Set<String> tablas = entityManagerFactory.getMetamodel().getEntities().stream()
+                .map(this::resolverNombreTabla)
+                .collect(Collectors.toSet());
+        tablas.removeIf(t -> t.equalsIgnoreCase("flyway_schema_history"));
+        return tablas;
+    }
+
+    /**
+     * Resuelve el nombre fisico de tabla de una entidad JPA. Si la entidad no
+     * declara @Table, Hibernate infiere el nombre (por defecto: nombre de clase
+     * en snake_case, pero eso depende del NamingStrategy). Aqui usamos
+     * PersistenceUnitUtil para obtener el nombre ya resuelto por Hibernate.
+     */
+    private String resolverNombreTabla(EntityType<?> entityType) {
+        PersistenceUnitUtil util = entityManagerFactory.getPersistenceUnitUtil();
+        // entityType.getName() da el nombre logico de la entidad (clase simple).
+        // El nombre fisico de tabla se obtiene del metamodelo de Hibernate via
+        // la anotacion @Table o la naming strategy. No hay API JPA estandar
+        // limpia para esto, pero el nombre de tabla fisico esta accesible via
+        // el metamodelo de Hibernate.
+        //
+        // Alternativa robusta: usar la anotacion @Table si esta presente, y si no,
+        // derivar el nombre con la misma estrategia que Hibernate (CamelCase -> snake_case).
+        // Como el proyecto no configura una naming strategy custom, Hibernate usa
+        // CamelCaseToUnderscoresNamingStrategy por defecto en Spring Boot.
+        Class<?> clase = entityType.getJavaType();
+        jakarta.persistence.Table table = clase.getAnnotation(jakarta.persistence.Table.class);
+        if (table != null && !table.name().isEmpty()) {
+            return table.name();
+        }
+        return camelCaseASnakeCase(clase.getSimpleName());
+    }
+
+    private String camelCaseASnakeCase(String nombre) {
+        return nombre
+                .replaceAll("([a-z0-9])([A-Z])", "$1_$2")
+                .replaceAll("([A-Z]+)([A-Z][a-z])", "$1_$2")
+                .toLowerCase();
     }
 }

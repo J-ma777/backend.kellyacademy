@@ -108,6 +108,32 @@ public class UsuarioService {
         usuarioRepository.delete(usuario);
     }
 
+    public UsuarioResponse cambiarEstado(UUID id, EstadoUsuario nuevoEstado) {
+
+        // Un admin no puede cambiarse el estado a si mismo: se bloquearia la sesion actual
+        // y no podria revertirlo. Mismo principio que eliminar().
+        if (SecurityUtils.esElMismoUsuario(id)) {
+            throw new BusinessException(
+                    "NO_PUEDE_AUTOCAMBIAR_ESTADO",
+                    "Un administrador no puede cambiar su propio estado"
+            );
+        }
+
+        Usuario usuario = usuarioRepository.findWithRolesById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+
+        if (usuario.getEstado() == nuevoEstado) {
+            throw new BusinessException(
+                    "ESTADO_SIN_CAMBIOS",
+                    "El usuario ya se encuentra en estado " + nuevoEstado
+            );
+        }
+
+        usuario.setEstado(nuevoEstado);
+
+        return usuarioMapper.toResponse(usuario);
+    }
+
     // Resuelve los nombres de roles del request a entidades. Falla si alguno no existe.
     // No creamos roles al vuelo: los roles del sistema son fijos y administrados.
     private Set<Rol> resolverRoles(Set<String> nombres) {

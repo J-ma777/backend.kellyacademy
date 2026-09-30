@@ -1,9 +1,6 @@
 package com.kellyacademy.user.controller;
 
-import com.kellyacademy.user.dto.request.ActualizarUsuarioRequest;
-import com.kellyacademy.user.dto.request.AsignarRolesUsuarioRequest;
-import com.kellyacademy.user.dto.request.CambiarEstadoUsuarioRequest;
-import com.kellyacademy.user.dto.request.CrearUsuarioRequest;
+import com.kellyacademy.user.dto.request.*;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
 import com.kellyacademy.user.dto.response.UsuarioResumenResponse;
 import com.kellyacademy.user.service.UsuarioService;
@@ -74,6 +71,17 @@ public class UsuarioController {
             @Valid @RequestBody AsignarRolesUsuarioRequest request
     ) {
         return ResponseEntity.ok(usuarioService.asignarRoles(id, request.roles()));
+    }
+
+    // Cambio de contrasena del propio usuario. La validacion de "solo el propio"
+    // va en el servicio (depende del {id} del path).
+    @PatchMapping("/{id}/contrasena")
+    public ResponseEntity<Void> cambiarContrasena(
+            @PathVariable UUID id,
+            @Valid @RequestBody CambiarContrasenaRequest request
+    ) {
+        usuarioService.cambiarContrasena(id, request);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}")

@@ -153,4 +153,110 @@ class MatriculaServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("matriculado");
     }
+
+    // ------------------------------------------------------------------
+    // cambiarEstado
+    // ------------------------------------------------------------------
+
+    @Test
+    void cambiarEstado_matriculaInexistente_lanzaResourceNotFound() {
+        UUID id = UUID.randomUUID();
+        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> matriculaService.cambiarEstado(id, EstadoMatricula.COMPLETADA))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(id.toString());
+    }
+
+    @Test
+    void cambiarEstado_mismoEstado_lanzaBusinessException() {
+        UUID id = UUID.randomUUID();
+        Matricula m = new Matricula();
+        m.setId(id);
+        m.setEstado(EstadoMatricula.ACTIVA);
+
+        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+
+        assertThatThrownBy(() -> matriculaService.cambiarEstado(id, EstadoMatricula.ACTIVA))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ESTADO_SIN_CAMBIOS");
+                    assertThat(ex.getMessage()).contains("ACTIVA");
+                });
+    }
+
+    @Test
+    void cambiarEstado_activaACompletada_exitoso() {
+        UUID id = UUID.randomUUID();
+        Matricula m = new Matricula();
+        m.setId(id);
+        m.setEstado(EstadoMatricula.ACTIVA);
+
+        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+        when(matriculaMapper.toResponse(m)).thenReturn(mock(MatriculaResponse.class));
+
+        matriculaService.cambiarEstado(id, EstadoMatricula.COMPLETADA);
+
+        assertThat(m.getEstado()).isEqualTo(EstadoMatricula.COMPLETADA);
+    }
+
+    @Test
+    void cambiarEstado_activaARiesgo_exitoso() {
+        UUID id = UUID.randomUUID();
+        Matricula m = new Matricula();
+        m.setId(id);
+        m.setEstado(EstadoMatricula.ACTIVA);
+
+        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+        when(matriculaMapper.toResponse(m)).thenReturn(mock(MatriculaResponse.class));
+
+        matriculaService.cambiarEstado(id, EstadoMatricula.RIESGO);
+
+        assertThat(m.getEstado()).isEqualTo(EstadoMatricula.RIESGO);
+    }
+
+    @Test
+    void cambiarEstado_riesgoAActiva_exitoso() {
+        UUID id = UUID.randomUUID();
+        Matricula m = new Matricula();
+        m.setId(id);
+        m.setEstado(EstadoMatricula.RIESGO);
+
+        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+        when(matriculaMapper.toResponse(m)).thenReturn(mock(MatriculaResponse.class));
+
+        matriculaService.cambiarEstado(id, EstadoMatricula.ACTIVA);
+
+        assertThat(m.getEstado()).isEqualTo(EstadoMatricula.ACTIVA);
+    }
+
+    @Test
+    void cambiarEstado_completadaARiesgo_lanzaBusinessException() {
+        UUID id = UUID.randomUUID();
+        Matricula m = new Matricula();
+        m.setId(id);
+        m.setEstado(EstadoMatricula.COMPLETADA);
+
+        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+
+        assertThatThrownBy(() -> matriculaService.cambiarEstado(id, EstadoMatricula.RIESGO))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("TRANSICION_ESTADO_INVALIDA");
+                    assertThat(ex.getMessage()).contains("COMPLETADA").contains("RIESGO");
+                });
+    }
+
+    @Test
+    void cambiarEstado_abandonadaAActiva_lanzaBusinessException() {
+        UUID id = UUID.randomUUID();
+        Matricula m = new Matricula();
+        m.setId(id);
+        m.setEstado(EstadoMatricula.ABANDONADA);
+
+        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+
+        assertThatThrownBy(() -> matriculaService.cambiarEstado(id, EstadoMatricula.ACTIVA))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("TRANSICION_ESTADO_INVALIDA");
+                });
+    }
 }

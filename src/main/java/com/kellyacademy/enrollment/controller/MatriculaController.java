@@ -1,5 +1,6 @@
 package com.kellyacademy.enrollment.controller;
 
+import com.kellyacademy.enrollment.dto.request.CambiarEstadoMatriculaRequest;
 import com.kellyacademy.enrollment.dto.request.CrearMatriculaRequest;
 import com.kellyacademy.enrollment.dto.response.MatriculaResponse;
 import com.kellyacademy.enrollment.dto.response.MatriculaResumenResponse;
@@ -45,6 +46,15 @@ public class MatriculaController {
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<MatriculaResponse> crear(@Valid @RequestBody CrearMatriculaRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(matriculaService.crear(request));
+    }
+
+    @PatchMapping("/{id}/estado")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<MatriculaResponse> cambiarEstado(
+            @PathVariable UUID id,
+            @Valid @RequestBody CambiarEstadoMatriculaRequest request
+    ) {
+        return ResponseEntity.ok(matriculaService.cambiarEstado(id, request.estado()));
     }
 
     @DeleteMapping("/{id}")

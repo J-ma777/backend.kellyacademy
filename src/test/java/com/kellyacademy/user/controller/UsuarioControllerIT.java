@@ -3,6 +3,7 @@ package com.kellyacademy.user.controller;
 import com.kellyacademy.shared.exception.ErrorResponse;
 import com.kellyacademy.support.IntegrationTestBase;
 import com.kellyacademy.user.dto.request.AsignarRolesUsuarioRequest;
+import com.kellyacademy.user.dto.request.CambiarContrasenaRequest;
 import com.kellyacademy.user.dto.request.CambiarEstadoUsuarioRequest;
 import com.kellyacademy.user.dto.request.CrearUsuarioRequest;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -195,5 +197,129 @@ class UsuarioControllerIT extends IntegrationTestBase {
         );
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    // ------------------------------------------------------------------
+    // cambiarContrasena
+    // ------------------------------------------------------------------
+
+    @Test
+    void cambiarContrasena_propioUsuario_devuelve204() {
+        UUID usuarioId = crearEstudianteParaTests();
+        String token = login("estudiante.estado.it@kellyacademy.com", PASSWORD);
+
+        CambiarContrasenaRequest req = new CambiarContrasenaRequest(PASSWORD, "NuevaPass123");
+
+        ResponseEntity<Void> resp = patch(
+                "/api/usuarios/" + usuarioId + "/contrasena",
+                token, req, Void.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void cambiarContrasena_actualIncorrecta_devuelve400() {
+        UUID usuarioId = crearEstudianteParaTests();
+        String token = login("estudiante.estado.it@kellyacademy.com", PASSWORD);
+
+        CambiarContrasenaRequest req = new CambiarContrasenaRequest("Incorrecta123", "NuevaPass123");
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/usuarios/" + usuarioId + "/contrasena",
+                token, req, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo())
+                .isEqualTo("CONTRASENA_ACTUAL_INCORRECTA");
+    }
+
+    @Test
+    void cambiarContrasena_nuevaIgualAActual_devuelve400() {
+        UUID usuarioId = crearEstudianteParaTests();
+        String token = login("estudiante.estado.it@kellyacademy.com", PASSWORD);
+
+        CambiarContrasenaRequest req = new CambiarContrasenaRequest(PASSWORD, PASSWORD);
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/usuarios/" + usuarioId + "/contrasena",
+                token, req, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo())
+                .isEqualTo("CONTRASENA_SIN_CAMBIOS");
+    }
+
+    @Test
+    void cambiarContrasena_otroUsuario_devuelve403() {
+        UUID usuarioId = crearEstudianteParaTests();
+
+        // docenteDueno intenta cambiar la contrasena del estudiante.
+        CambiarContrasenaRequest req = new CambiarContrasenaRequest(PASSWORD, "NuevaPass123");
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/usuarios/" + usuarioId + "/contrasena",
+                docenteDuenoToken, req, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void cambiarContrasena_sinAutenticar_devuelve401() {
+        UUID usuarioId = crearEstudianteParaTests();
+        CambiarContrasenaRequest req = new CambiarContrasenaRequest(PASSWORD, "NuevaPass123");
+
+        // Sin token: no usamos patch del base porque requiere token. Hacemos exchange crudo.
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/usuarios/" + usuarioId + "/contrasena",
+                HttpMethod.PATCH,
+                new HttpEntity<>(req),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode().value()).isIn(401, 403);
+    }
+
+    @Test
+    void cambiarContrasena_nuevaSinNumero_devuelve400() {
+        UUID usuarioId = crearEstudianteParaTests();
+        String token = login("estudiante.estado.it@kellyacademy.com", PASSWORD);
+
+        CambiarContrasenaRequest req = new CambiarContrasenaRequest(PASSWORD, "SoloLetras");
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/usuarios/" + usuarioId + "/contrasena",
+                token, req, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void cambiarContrasena_puedeLoguearseConNueva() {
+        UUID usuarioId = crearEstudianteParaTests();
+        String token = login("estudiante.estado.it@kellyacademy.com", PASSWORD);
+
+        CambiarContrasenaRequest req = new CambiarContrasenaRequest(PASSWORD, "NuevaPass123");
+
+        patch("/api/usuarios/" + usuarioId + "/contrasena", token, req, Void.class);
+
+        // Login con la nueva: debe funcionar.
+        String nuevoToken = login("estudiante.estado.it@kellyacademy.com", "NuevaPass123");
+        assertThat(nuevoToken).isNotBlank();
+
+        // Login con la vieja: debe fallar.
+        ResponseEntity<ErrorResponse> resp = rest.postForEntity(
+                "/auth/login",
+                new com.kellyacademy.security.auth.dto.AuthRequest() {{
+                    setCorreoElectronico("estudiante.estado.it@kellyacademy.com");
+                    setContrasena(PASSWORD);
+                }},
+                ErrorResponse.class
+        );
+        assertThat(resp.getStatusCode().value()).isEqualTo(401);
     }
 }

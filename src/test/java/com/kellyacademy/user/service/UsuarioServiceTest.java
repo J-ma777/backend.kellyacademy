@@ -4,6 +4,7 @@ import com.kellyacademy.security.user.CustomUserDetails;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.CorreoYaRegistradoException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
+import com.kellyacademy.user.dto.request.CambiarContrasenaRequest;
 import com.kellyacademy.user.dto.request.CrearUsuarioRequest;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
 import com.kellyacademy.user.entity.Rol;
@@ -408,6 +409,115 @@ class UsuarioServiceTest {
         assertThat(resultado.roles()).containsExactly("DOCENTE");
         assertThat(objetivo.getRoles()).containsExactly(rolDocente);
 
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    // ------------------------------------------------------------------
+    // cambiarContrasena
+    // ------------------------------------------------------------------
+
+    @Test
+    void cambiarContrasena_aOtroUsuario_lanzaAccessDenied() {
+
+        UUID otroId = UUID.randomUUID();
+        CambiarContrasenaRequest request = new CambiarContrasenaRequest(
+                "Password123", "Password456"
+        );
+
+        assertThatThrownBy(() -> usuarioService.cambiarContrasena(otroId, request))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(usuarioRepository, never()).findById(any());
+    }
+
+    @Test
+    void cambiarContrasena_usuarioInexistente_lanzaResourceNotFound() {
+
+        UUID id = UUID.randomUUID();
+        CambiarContrasenaRequest request = new CambiarContrasenaRequest(
+                "Password123", "Password456"
+        );
+
+        // Ya autenticado como usuarioAutenticadoId; usamos ese id para pasar la validacion "propio".
+        when(usuarioRepository.findById(usuarioAutenticadoId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> usuarioService.cambiarContrasena(usuarioAutenticadoId, request))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(usuarioAutenticadoId.toString());
+    }
+
+    @Test
+    void cambiarContrasena_actualIncorrecta_lanzaBusinessException() {
+
+        UUID id = usuarioAutenticadoId;
+        Usuario usuario = new Usuario();
+        usuario.setId(id);
+        usuario.setContrasena("$2a$12$hashActual");
+
+        CambiarContrasenaRequest request = new CambiarContrasenaRequest(
+                "Incorrecta123", "Password456"
+        );
+
+        when(usuarioRepository.findById(id)).thenReturn(Optional.of(usuario));
+        when(passwordEncoder.matches("Incorrecta123", "$2a$12$hashActual"))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> usuarioService.cambiarContrasena(id, request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("CONTRASENA_ACTUAL_INCORRECTA");
+                    assertThat(ex.getMessage()).contains("no es correcta");
+                });
+
+        verify(passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    void cambiarContrasena_nuevaIgualAActual_lanzaBusinessException() {
+
+        UUID id = usuarioAutenticadoId;
+        Usuario usuario = new Usuario();
+        usuario.setId(id);
+        usuario.setContrasena("$2a$12$hashActual");
+
+        CambiarContrasenaRequest request = new CambiarContrasenaRequest(
+                "Password123", "Password123"
+        );
+
+        when(usuarioRepository.findById(id)).thenReturn(Optional.of(usuario));
+        when(passwordEncoder.matches("Password123", "$2a$12$hashActual"))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> usuarioService.cambiarContrasena(id, request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("CONTRASENA_SIN_CAMBIOS");
+                    assertThat(ex.getMessage()).contains("distinta");
+                });
+
+        verify(passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    void cambiarContrasena_exitoso_hasheaYActualiza() {
+
+        UUID id = usuarioAutenticadoId;
+        Usuario usuario = new Usuario();
+        usuario.setId(id);
+        usuario.setContrasena("$2a$12$hashActual");
+
+        CambiarContrasenaRequest request = new CambiarContrasenaRequest(
+                "Password123", "Password456"
+        );
+
+        when(usuarioRepository.findById(id)).thenReturn(Optional.of(usuario));
+        when(passwordEncoder.matches("Password123", "$2a$12$hashActual"))
+                .thenReturn(true);
+        when(passwordEncoder.encode("Password456")).thenReturn("$2a$12$hashNuevo");
+
+        usuarioService.cambiarContrasena(id, request);
+
+        assertThat(usuario.getContrasena()).isEqualTo("$2a$12$hashNuevo");
+
+        // No se hace save() explicito: dirty checking de JPA en @Transactional.
         verify(usuarioRepository, never()).save(any());
     }
 }

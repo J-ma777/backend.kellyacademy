@@ -5,6 +5,7 @@ import com.kellyacademy.shared.exception.CorreoYaRegistradoException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
 import com.kellyacademy.shared.util.SecurityUtils;
 import com.kellyacademy.user.dto.request.ActualizarUsuarioRequest;
+import com.kellyacademy.user.dto.request.CambiarContrasenaRequest;
 import com.kellyacademy.user.dto.request.CrearUsuarioRequest;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
 import com.kellyacademy.user.dto.response.UsuarioResumenResponse;
@@ -153,6 +154,40 @@ public class UsuarioService {
         usuario.setRoles(roles);
 
         return usuarioMapper.toResponse(usuario);
+    }
+
+    // Cambia la contrasena del propio usuario autenticado.
+    // Requiere conocer la actual como prueba de identidad (defensa en profundidad
+    // contra tokens robados). No hay re-hash si la nueva es identica a la actual.
+    public void cambiarContrasena(UUID id, CambiarContrasenaRequest request) {
+
+        // Solo el propio usuario. Un ADMIN no puede forzar reset por este endpoint
+        // (no conoce la contrasena actual). Si se necesita reset admin, va aparte.
+        if (!SecurityUtils.esElMismoUsuario(id)) {
+            throw new AccessDeniedException("No tienes permisos para cambiar la contrasena de este usuario");
+        }
+
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+
+        // Validacion de contrasena actual contra el hash almacenado.
+        if (!passwordEncoder.matches(request.contrasenaActual(), usuario.getContrasena())) {
+            throw new BusinessException(
+                    "CONTRASENA_ACTUAL_INCORRECTA",
+                    "La contrasena actual no es correcta"
+            );
+        }
+
+        // No-op: la nueva no puede ser igual a la actual.
+        // Se compara en claro (ambas vienen del request / se acaba de validar la actual).
+        if (request.contrasenaNueva().equals(request.contrasenaActual())) {
+            throw new BusinessException(
+                    "CONTRASENA_SIN_CAMBIOS",
+                    "La contrasena nueva debe ser distinta a la actual"
+            );
+        }
+
+        usuario.setContrasena(passwordEncoder.encode(request.contrasenaNueva()));
     }
 
     // Resuelve los nombres de roles del request a entidades. Falla si alguno no existe.

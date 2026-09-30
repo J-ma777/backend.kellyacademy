@@ -10,10 +10,12 @@ import com.kellyacademy.course.dto.response.TareaResponse;
 import com.kellyacademy.course.dto.response.UnidadResponse;
 import com.kellyacademy.course.enums.NivelCefr;
 import com.kellyacademy.enrollment.dto.request.ActualizarEntregaRequest;
+import com.kellyacademy.enrollment.dto.request.CalificarEntregaRequest;
 import com.kellyacademy.enrollment.dto.request.CrearEntregaRequest;
 import com.kellyacademy.enrollment.dto.request.CrearMatriculaRequest;
 import com.kellyacademy.enrollment.dto.response.EntregaResponse;
 import com.kellyacademy.enrollment.dto.response.MatriculaResponse;
+import com.kellyacademy.enrollment.enums.EstadoEntrega;
 import com.kellyacademy.shared.exception.ErrorResponse;
 import com.kellyacademy.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -187,5 +190,149 @@ class EntregaControllerIT extends IntegrationTestBase {
         ResponseEntity<Void> resp = delete("/api/entregas/" + entregaId, adminToken);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void calificar_comoDocenteDueno_devuelve200() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, req, EntregaResponse.class).getBody()).id();
+
+        CalificarEntregaRequest calReq = new CalificarEntregaRequest(
+                new BigDecimal("85.50"), "Buen trabajo"
+        );
+
+        ResponseEntity<EntregaResponse> resp = patch(
+                "/api/entregas/" + entregaId + "/calificar",
+                docenteDuenoToken, calReq, EntregaResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).nota()).isEqualByComparingTo("85.50");
+        assertThat(resp.getBody().retroalimentacion()).isEqualTo("Buen trabajo");
+        assertThat(resp.getBody().estado()).isEqualTo(EstadoEntrega.CALIFICADA);
+    }
+
+    @Test
+    void calificar_comoDocenteAjeno_devuelve403() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, req, EntregaResponse.class).getBody()).id();
+
+        CalificarEntregaRequest calReq = new CalificarEntregaRequest(
+                new BigDecimal("85.50"), "Buen trabajo"
+        );
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/entregas/" + entregaId + "/calificar",
+                docenteAjenoToken, calReq, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void calificar_comoEstudiante_devuelve403() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, req, EntregaResponse.class).getBody()).id();
+
+        CalificarEntregaRequest calReq = new CalificarEntregaRequest(
+                new BigDecimal("85.50"), null
+        );
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/entregas/" + entregaId + "/calificar",
+                estudianteToken, calReq, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void calificar_notaExcedePuntajeMaximo_devuelve400() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, req, EntregaResponse.class).getBody()).id();
+
+        CalificarEntregaRequest calReq = new CalificarEntregaRequest(
+                new BigDecimal("150.00"), null
+        );
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/entregas/" + entregaId + "/calificar",
+                docenteDuenoToken, calReq, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo())
+                .isEqualTo("NOTA_EXCEDE_PUNTAJE_MAXIMO");
+    }
+
+    @Test
+    void calificar_notaNegativa_devuelve400() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, req, EntregaResponse.class).getBody()).id();
+
+        CalificarEntregaRequest calReq = new CalificarEntregaRequest(
+                new BigDecimal("-1.00"), null
+        );
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/entregas/" + entregaId + "/calificar",
+                docenteDuenoToken, calReq, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void recalificar_sobrescribeNotaYRetro() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, req, EntregaResponse.class).getBody()).id();
+
+        patch("/api/entregas/" + entregaId + "/calificar",
+                docenteDuenoToken,
+                new CalificarEntregaRequest(new BigDecimal("70.00"), "Primera"),
+                EntregaResponse.class);
+
+        ResponseEntity<EntregaResponse> resp = patch(
+                "/api/entregas/" + entregaId + "/calificar",
+                docenteDuenoToken,
+                new CalificarEntregaRequest(new BigDecimal("90.00"), "Corregida"),
+                EntregaResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).nota()).isEqualByComparingTo("90.00");
+        assertThat(resp.getBody().retroalimentacion()).isEqualTo("Corregida");
+    }
+
+    @Test
+    void crear_sinUrlArchivo_devuelve201() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, null
+        );
+
+        ResponseEntity<EntregaResponse> resp = post(
+                "/api/entregas", docenteDuenoToken, req, EntregaResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(Objects.requireNonNull(resp.getBody()).urlArchivo()).isNull();
     }
 }

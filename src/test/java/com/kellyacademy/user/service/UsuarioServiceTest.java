@@ -322,4 +322,92 @@ class UsuarioServiceTest {
 
         verify(usuarioRepository, never()).save(any());
     }
+
+    // ------------------------------------------------------------------
+    // asignarRoles
+    // ------------------------------------------------------------------
+
+    @Test
+    void asignarRoles_aSiMismo_lanzaBusinessException() {
+
+        autenticarComo(usuarioAutenticadoId, "ADMINISTRADOR");
+
+        assertThatThrownBy(() ->
+                usuarioService.asignarRoles(usuarioAutenticadoId, Set.of("ESTUDIANTE")))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("NO_PUEDE_AUTOCAMBIAR_ROLES");
+                    assertThat(ex.getMessage()).contains("no puede modificar sus propios roles");
+                });
+
+        verify(usuarioRepository, never()).findWithRolesById(any());
+    }
+
+    @Test
+    void asignarRoles_rolInexistente_lanzaBusinessException() {
+
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = new Usuario();
+        objetivo.setId(objetivoId);
+        objetivo.setEstado(EstadoUsuario.ACTIVO);
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(rolRepository.findByNombre("ROL_FANTASMA"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                usuarioService.asignarRoles(objetivoId, Set.of("ROL_FANTASMA")))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ROL_INEXISTENTE");
+                    assertThat(ex.getMessage()).contains("ROL_FANTASMA");
+                });
+    }
+
+    @Test
+    void asignarRoles_exitoso_reemplazaRoles() {
+
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+
+        Rol rolDocente = new Rol();
+        rolDocente.setId(UUID.randomUUID());
+        rolDocente.setNombre("DOCENTE");
+
+        Usuario objetivo = new Usuario();
+        objetivo.setId(objetivoId);
+        objetivo.setNombre("Juan");
+        objetivo.setApellido("Perez");
+        objetivo.setCorreoElectronico("juan@kelly.com");
+        objetivo.setEstado(EstadoUsuario.ACTIVO);
+        // Estado inicial: solo ESTUDIANTE (no lo modelamos, solo verificamos que se reemplaza).
+
+        UsuarioResponse responseEsperado = new UsuarioResponse(
+                objetivoId,
+                "Juan",
+                "Perez",
+                "juan@kelly.com",
+                null,
+                EstadoUsuario.ACTIVO,
+                java.util.List.of("DOCENTE"),
+                null,
+                null
+        );
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(rolRepository.findByNombre("DOCENTE"))
+                .thenReturn(Optional.of(rolDocente));
+        when(usuarioMapper.toResponse(objetivo)).thenReturn(responseEsperado);
+
+        UsuarioResponse resultado = usuarioService.asignarRoles(
+                objetivoId, Set.of("DOCENTE"));
+
+        assertThat(resultado.roles()).containsExactly("DOCENTE");
+        assertThat(objetivo.getRoles()).containsExactly(rolDocente);
+
+        verify(usuarioRepository, never()).save(any());
+    }
 }

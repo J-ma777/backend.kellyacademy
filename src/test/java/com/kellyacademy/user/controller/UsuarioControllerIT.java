@@ -2,6 +2,7 @@ package com.kellyacademy.user.controller;
 
 import com.kellyacademy.shared.exception.ErrorResponse;
 import com.kellyacademy.support.IntegrationTestBase;
+import com.kellyacademy.user.dto.request.AsignarRolesUsuarioRequest;
 import com.kellyacademy.user.dto.request.CambiarEstadoUsuarioRequest;
 import com.kellyacademy.user.dto.request.CrearUsuarioRequest;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
@@ -113,6 +114,83 @@ class UsuarioControllerIT extends IntegrationTestBase {
                 "/api/usuarios/" + usuarioId + "/estado",
                 HttpMethod.PATCH,
                 new HttpEntity<>("{}", headersConToken(adminToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void asignarRoles_comoAdmin_reemplazaRoles_devuelve200() {
+        UUID usuarioId = crearEstudianteParaTests();
+        AsignarRolesUsuarioRequest req = new AsignarRolesUsuarioRequest(Set.of("DOCENTE"));
+
+        ResponseEntity<UsuarioResponse> resp = rest.exchange(
+                "/api/usuarios/" + usuarioId + "/roles",
+                HttpMethod.PUT,
+                new HttpEntity<>(req, headersConToken(adminToken)),
+                UsuarioResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody().roles()).containsExactly("DOCENTE");
+    }
+
+    @Test
+    void asignarRoles_comoDocente_devuelve403() {
+        UUID usuarioId = crearEstudianteParaTests();
+        AsignarRolesUsuarioRequest req = new AsignarRolesUsuarioRequest(Set.of("DOCENTE"));
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/usuarios/" + usuarioId + "/roles",
+                HttpMethod.PUT,
+                new HttpEntity<>(req, headersConToken(docenteDuenoToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void asignarRoles_aSiMismo_devuelve400() {
+        AsignarRolesUsuarioRequest req = new AsignarRolesUsuarioRequest(Set.of("ESTUDIANTE"));
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/usuarios/" + adminId + "/roles",
+                HttpMethod.PUT,
+                new HttpEntity<>(req, headersConToken(adminToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("NO_PUEDE_AUTOCAMBIAR_ROLES");
+    }
+
+    @Test
+    void asignarRoles_rolInexistente_devuelve400() {
+        UUID usuarioId = crearEstudianteParaTests();
+        AsignarRolesUsuarioRequest req = new AsignarRolesUsuarioRequest(Set.of("ROL_FANTASMA"));
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/usuarios/" + usuarioId + "/roles",
+                HttpMethod.PUT,
+                new HttpEntity<>(req, headersConToken(adminToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("ROL_INEXISTENTE");
+    }
+
+    @Test
+    void asignarRoles_setVacio_devuelve400() {
+        UUID usuarioId = crearEstudianteParaTests();
+        AsignarRolesUsuarioRequest req = new AsignarRolesUsuarioRequest(Set.of());
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/usuarios/" + usuarioId + "/roles",
+                HttpMethod.PUT,
+                new HttpEntity<>(req, headersConToken(adminToken)),
                 ErrorResponse.class
         );
 

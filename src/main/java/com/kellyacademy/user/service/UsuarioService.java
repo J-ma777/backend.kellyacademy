@@ -134,6 +134,27 @@ public class UsuarioService {
         return usuarioMapper.toResponse(usuario);
     }
 
+    public UsuarioResponse asignarRoles(UUID id, Set<String> nombresRoles) {
+
+        // Un admin no puede modificarse sus propios roles: podria quitarse
+        // ADMINISTRADOR y quedarse sin acceso administrativo para revertirlo.
+        if (SecurityUtils.esElMismoUsuario(id)) {
+            throw new BusinessException(
+                    "NO_PUEDE_AUTOCAMBIAR_ROLES",
+                    "Un administrador no puede modificar sus propios roles"
+            );
+        }
+
+        Usuario usuario = usuarioRepository.findWithRolesById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+
+        Set<Rol> roles = resolverRoles(nombresRoles);
+
+        usuario.setRoles(roles);
+
+        return usuarioMapper.toResponse(usuario);
+    }
+
     // Resuelve los nombres de roles del request a entidades. Falla si alguno no existe.
     // No creamos roles al vuelo: los roles del sistema son fijos y administrados.
     private Set<Rol> resolverRoles(Set<String> nombres) {

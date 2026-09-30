@@ -156,6 +156,83 @@ public class TutoriaService {
         tutoriaRepository.delete(tutoria);
     }
 
+    public TutoriaResponse cambiarEstado(UUID id, EstadoTutoria nuevoEstado) {
+
+        Tutoria tutoria = tutoriaRepository.findWithEstudianteDocenteCursoById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Tutoria", "id", id));
+
+        // Autorizacion por transicion: el autenticado debe poder hacer este cambio especifico.
+        validarPuedeCambiarEstado(tutoria, nuevoEstado);
+
+        EstadoTutoria actual = tutoria.getEstado();
+
+        if (actual == nuevoEstado) {
+            throw new BusinessException(
+                    "ESTADO_SIN_CAMBIOS",
+                    "La tutoria ya se encuentra en estado " + nuevoEstado
+            );
+        }
+
+        validarTransicionEstado(actual, nuevoEstado);
+
+        tutoria.setEstado(nuevoEstado);
+
+        Tutoria guardada = tutoriaRepository.save(tutoria);
+        Tutoria cargada = tutoriaRepository.findWithEstudianteDocenteCursoById(guardada.getId())
+                .orElseThrow(() -> new IllegalStateException("Tutoria actualizada no encontrada"));
+        return tutoriaMapper.toResponse(cargada);
+    }
+
+    // Maquina de estados:
+    //   PENDIENTE  -> CONFIRMADA, CANCELADA
+    //   CONFIRMADA -> COMPLETADA, CANCELADA
+    //   COMPLETADA -> (terminal)
+    //   CANCELADA  -> (terminal)
+    private void validarTransicionEstado(EstadoTutoria actual, EstadoTutoria nuevo) {
+        boolean permitida = switch (actual) {
+            case PENDIENTE -> nuevo == EstadoTutoria.CONFIRMADA
+                    || nuevo == EstadoTutoria.CANCELADA;
+            case CONFIRMADA -> nuevo == EstadoTutoria.COMPLETADA
+                    || nuevo == EstadoTutoria.CANCELADA;
+            case COMPLETADA -> false;
+            case CANCELADA -> false;
+        };
+
+        if (!permitida) {
+            throw new BusinessException(
+                    "TRANSICION_ESTADO_INVALIDA",
+                    "No se puede pasar de " + actual + " a " + nuevo
+            );
+        }
+    }
+
+    // Autorizacion especifica por transicion:
+    //   - CONFIRMADA -> COMPLETADA: solo el docente o ADMIN. El estudiante no decide
+    //     si la tutoria que recibe se llevo a cabo.
+    //   - Resto de transiciones: cualquier participante (estudiante, docente) o ADMIN.
+    private void validarPuedeCambiarEstado(Tutoria tutoria, EstadoTutoria nuevoEstado) {
+        if (SecurityUtils.esAdmin()) {
+            return;
+        }
+
+        UUID autenticadoId = SecurityUtils.getUsuarioAutenticadoId();
+        boolean esEstudiante = tutoria.getEstudiante().getId().equals(autenticadoId);
+        boolean esDocente = tutoria.getDocente().getId().equals(autenticadoId);
+
+        if (!esEstudiante && !esDocente) {
+            throw new AccessDeniedException(
+                    "Solo el estudiante, el docente o un ADMIN pueden cambiar el estado de esta tutoria."
+            );
+        }
+
+        // Regla especifica: solo el docente (o ADMIN, ya cubierto arriba) puede COMPLETAR.
+        if (nuevoEstado == EstadoTutoria.COMPLETADA && !esDocente) {
+            throw new AccessDeniedException(
+                    "Solo el docente puede marcar una tutoria como COMPLETADA."
+            );
+        }
+    }
+
     // ------------------------------------------------------------------------
     // VALIDACIONES DE NEGOCIO
     // ------------------------------------------------------------------------

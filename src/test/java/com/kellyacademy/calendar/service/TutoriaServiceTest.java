@@ -438,4 +438,171 @@ class TutoriaServiceTest {
 
         verify(tutoriaRepository).delete(t);
     }
+
+    // ------------------------------------------------------------------
+    // cambiarEstado
+    // ------------------------------------------------------------------
+
+    private Tutoria tutoriaConEstado(EstadoTutoria estado) {
+        Tutoria t = new Tutoria();
+        t.setId(UUID.randomUUID());
+        t.setEstudiante(estudiante);
+        t.setDocente(docente);
+        t.setEstado(estado);
+        t.setFecha(LocalDateTime.now().plusDays(1));
+        t.setDuracionMinutos(60);
+        return t;
+    }
+
+    @Test
+    void cambiarEstado_tutoriaInexistente_lanzaResourceNotFound() {
+        autenticarComo(docente);
+        UUID id = UUID.randomUUID();
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> tutoriaService.cambiarEstado(id, EstadoTutoria.CONFIRMADA))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void cambiarEstado_pendienteAConfirmada_comoEstudiante_ok() {
+        autenticarComo(estudiante);
+        Tutoria t = tutoriaConEstado(EstadoTutoria.PENDIENTE);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaRepository.save(t)).thenReturn(t);
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaMapper.toResponse(t)).thenReturn(mock(TutoriaResponse.class));
+
+        tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.CONFIRMADA);
+
+        assertThat(t.getEstado()).isEqualTo(EstadoTutoria.CONFIRMADA);
+    }
+
+    @Test
+    void cambiarEstado_pendienteAConfirmada_comoDocente_ok() {
+        autenticarComo(docente);
+        Tutoria t = tutoriaConEstado(EstadoTutoria.PENDIENTE);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaRepository.save(t)).thenReturn(t);
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaMapper.toResponse(t)).thenReturn(mock(TutoriaResponse.class));
+
+        tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.CONFIRMADA);
+
+        assertThat(t.getEstado()).isEqualTo(EstadoTutoria.CONFIRMADA);
+    }
+
+    @Test
+    void cambiarEstado_confirmadaACompletada_comoDocente_ok() {
+        autenticarComo(docente);
+        Tutoria t = tutoriaConEstado(EstadoTutoria.CONFIRMADA);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaRepository.save(t)).thenReturn(t);
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaMapper.toResponse(t)).thenReturn(mock(TutoriaResponse.class));
+
+        tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.COMPLETADA);
+
+        assertThat(t.getEstado()).isEqualTo(EstadoTutoria.COMPLETADA);
+    }
+
+    @Test
+    void cambiarEstado_confirmadaACompletada_comoEstudiante_lanzaAccessDenied() {
+        autenticarComo(estudiante);
+        Tutoria t = tutoriaConEstado(EstadoTutoria.CONFIRMADA);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+
+        assertThatThrownBy(() -> tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.COMPLETADA))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("docente");
+    }
+
+    @Test
+    void cambiarEstado_comoTercero_lanzaAccessDenied() {
+        Usuario tercero = new Usuario();
+        tercero.setId(UUID.randomUUID());
+        tercero.setRoles(Set.of());
+        autenticarComo(tercero);
+
+        Tutoria t = tutoriaConEstado(EstadoTutoria.PENDIENTE);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+
+        assertThatThrownBy(() -> tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.CONFIRMADA))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void cambiarEstado_mismoEstado_lanzaBusinessException() {
+        autenticarComo(estudiante);
+        Tutoria t = tutoriaConEstado(EstadoTutoria.PENDIENTE);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+
+        assertThatThrownBy(() -> tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.PENDIENTE))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ESTADO_SIN_CAMBIOS");
+                    assertThat(ex.getMessage()).contains("PENDIENTE");
+                });
+    }
+
+    @Test
+    void cambiarEstado_completadaAConfirmada_lanzaBusinessException() {
+        autenticarComo(docente);
+        Tutoria t = tutoriaConEstado(EstadoTutoria.COMPLETADA);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+
+        assertThatThrownBy(() -> tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.CONFIRMADA))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("TRANSICION_ESTADO_INVALIDA");
+                    assertThat(ex.getMessage()).contains("COMPLETADA").contains("CONFIRMADA");
+                });
+    }
+
+    @Test
+    void cambiarEstado_canceladaAConfirmada_lanzaBusinessException() {
+        autenticarComo(docente);
+        Tutoria t = tutoriaConEstado(EstadoTutoria.CANCELADA);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+
+        assertThatThrownBy(() -> tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.CONFIRMADA))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("TRANSICION_ESTADO_INVALIDA");
+                });
+    }
+
+    @Test
+    void cambiarEstado_pendienteACancelada_comoEstudiante_ok() {
+        autenticarComo(estudiante);
+        Tutoria t = tutoriaConEstado(EstadoTutoria.PENDIENTE);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaRepository.save(t)).thenReturn(t);
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaMapper.toResponse(t)).thenReturn(mock(TutoriaResponse.class));
+
+        tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.CANCELADA);
+
+        assertThat(t.getEstado()).isEqualTo(EstadoTutoria.CANCELADA);
+    }
 }

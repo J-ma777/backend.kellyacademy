@@ -3,8 +3,10 @@ package com.kellyacademy.enrollment.controller;
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
 import com.kellyacademy.course.dto.response.CursoResponse;
 import com.kellyacademy.course.enums.NivelCefr;
+import com.kellyacademy.enrollment.dto.request.CambiarEstadoMatriculaRequest;
 import com.kellyacademy.enrollment.dto.request.CrearMatriculaRequest;
 import com.kellyacademy.enrollment.dto.response.MatriculaResponse;
+import com.kellyacademy.enrollment.enums.EstadoMatricula;
 import com.kellyacademy.shared.exception.ErrorResponse;
 import com.kellyacademy.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +43,7 @@ class MatriculaControllerIT extends IntegrationTestBase {
         ResponseEntity<CursoResponse> curso = post("/api/cursos", adminToken, c, CursoResponse.class);
         cursoId = Objects.requireNonNull(curso.getBody()).id();
 
-        // Activamos el curso por repositorio (no hay endpoint de cambio de estado aun: deuda #13, FASE 5).
+        // Activamos el curso via endpoint administrativo (deuda #13 resuelta en FASE 5).
         activarCurso(cursoId);
     }
 
@@ -203,5 +205,169 @@ class MatriculaControllerIT extends IntegrationTestBase {
                 deleteWithBody("/api/matriculas/" + matriculaId, docenteDuenoToken, ErrorResponse.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // ------------------------------------------------------------------
+    // cambiarEstado
+    // ------------------------------------------------------------------
+
+    private UUID crearMatriculaActiva() {
+        CrearMatriculaRequest req = new CrearMatriculaRequest(cursoId, estudianteId);
+        MatriculaResponse creada = post("/api/matriculas", adminToken, req, MatriculaResponse.class).getBody();
+        return Objects.requireNonNull(creada).id();
+    }
+
+    @Test
+    void cambiarEstado_activaACompletada_comoAdmin_devuelve200() {
+        UUID matriculaId = crearMatriculaActiva();
+        CambiarEstadoMatriculaRequest req = new CambiarEstadoMatriculaRequest(EstadoMatricula.COMPLETADA);
+
+        ResponseEntity<MatriculaResponse> resp = rest.exchange(
+                "/api/matriculas/" + matriculaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(req, headersConToken(adminToken)),
+                MatriculaResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).estado()).isEqualTo(EstadoMatricula.COMPLETADA);
+    }
+
+    @Test
+    void cambiarEstado_activaARiesgo_devuelve200() {
+        UUID matriculaId = crearMatriculaActiva();
+        CambiarEstadoMatriculaRequest req = new CambiarEstadoMatriculaRequest(EstadoMatricula.RIESGO);
+
+        ResponseEntity<MatriculaResponse> resp = rest.exchange(
+                "/api/matriculas/" + matriculaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(req, headersConToken(adminToken)),
+                MatriculaResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).estado()).isEqualTo(EstadoMatricula.RIESGO);
+    }
+
+    @Test
+    void cambiarEstado_riesgoAActiva_devuelve200() {
+        UUID matriculaId = crearMatriculaActiva();
+        rest.exchange(
+                "/api/matriculas/" + matriculaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(
+                        new CambiarEstadoMatriculaRequest(EstadoMatricula.RIESGO),
+                        headersConToken(adminToken)),
+                MatriculaResponse.class
+        );
+
+        CambiarEstadoMatriculaRequest req = new CambiarEstadoMatriculaRequest(EstadoMatricula.ACTIVA);
+        ResponseEntity<MatriculaResponse> resp = rest.exchange(
+                "/api/matriculas/" + matriculaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(req, headersConToken(adminToken)),
+                MatriculaResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).estado()).isEqualTo(EstadoMatricula.ACTIVA);
+    }
+
+    @Test
+    void cambiarEstado_mismoEstado_devuelve400() {
+        UUID matriculaId = crearMatriculaActiva();
+        CambiarEstadoMatriculaRequest req = new CambiarEstadoMatriculaRequest(EstadoMatricula.ACTIVA);
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/matriculas/" + matriculaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(req, headersConToken(adminToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo()).isEqualTo("ESTADO_SIN_CAMBIOS");
+    }
+
+    @Test
+    void cambiarEstado_completadaARiesgo_devuelve400() {
+        UUID matriculaId = crearMatriculaActiva();
+        rest.exchange(
+                "/api/matriculas/" + matriculaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(
+                        new CambiarEstadoMatriculaRequest(EstadoMatricula.COMPLETADA),
+                        headersConToken(adminToken)),
+                MatriculaResponse.class
+        );
+
+        CambiarEstadoMatriculaRequest req = new CambiarEstadoMatriculaRequest(EstadoMatricula.RIESGO);
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/matriculas/" + matriculaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(req, headersConToken(adminToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo()).isEqualTo("TRANSICION_ESTADO_INVALIDA");
+    }
+
+    @Test
+    void cambiarEstado_comoDocente_devuelve403() {
+        UUID matriculaId = crearMatriculaActiva();
+        CambiarEstadoMatriculaRequest req = new CambiarEstadoMatriculaRequest(EstadoMatricula.COMPLETADA);
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/matriculas/" + matriculaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(req, headersConToken(docenteDuenoToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void cambiarEstado_comoEstudiante_devuelve403() {
+        UUID matriculaId = crearMatriculaActiva();
+        CambiarEstadoMatriculaRequest req = new CambiarEstadoMatriculaRequest(EstadoMatricula.COMPLETADA);
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/matriculas/" + matriculaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(req, headersConToken(estudianteToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void cambiarEstado_matriculaInexistente_devuelve404() {
+        CambiarEstadoMatriculaRequest req = new CambiarEstadoMatriculaRequest(EstadoMatricula.COMPLETADA);
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/matriculas/" + UUID.randomUUID() + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(req, headersConToken(adminToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void cambiarEstado_sinEstado_devuelve400() {
+        UUID matriculaId = crearMatriculaActiva();
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/matriculas/" + matriculaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>("{}", headersConToken(adminToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }

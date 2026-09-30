@@ -107,6 +107,52 @@ public class MatriculaService {
         matriculaRepository.delete(matricula);
     }
 
+    public MatriculaResponse cambiarEstado(UUID id, EstadoMatricula nuevoEstado) {
+
+        Matricula matricula = matriculaRepository.findWithCursoAndEstudianteById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+
+        EstadoMatricula actual = matricula.getEstado();
+
+        if (actual == nuevoEstado) {
+            throw new BusinessException(
+                    "ESTADO_SIN_CAMBIOS",
+                    "La matricula ya se encuentra en estado " + nuevoEstado
+            );
+        }
+
+        validarTransicionEstado(actual, nuevoEstado);
+
+        matricula.setEstado(nuevoEstado);
+
+        return matriculaMapper.toResponse(matricula);
+    }
+
+    // Maquina de estados:
+    //   ACTIVA     -> COMPLETADA, RIESGO, ABANDONADA
+    //   RIESGO     -> ACTIVA, COMPLETADA, ABANDONADA
+    //   COMPLETADA -> (terminal)
+    //   ABANDONADA -> (terminal)
+    private void validarTransicionEstado(EstadoMatricula actual, EstadoMatricula nuevo) {
+        boolean permitida = switch (actual) {
+            case ACTIVA -> nuevo == EstadoMatricula.COMPLETADA
+                    || nuevo == EstadoMatricula.RIESGO
+                    || nuevo == EstadoMatricula.ABANDONADA;
+            case RIESGO -> nuevo == EstadoMatricula.ACTIVA
+                    || nuevo == EstadoMatricula.COMPLETADA
+                    || nuevo == EstadoMatricula.ABANDONADA;
+            case COMPLETADA -> false;
+            case ABANDONADA -> false;
+        };
+
+        if (!permitida) {
+            throw new BusinessException(
+                    "TRANSICION_ESTADO_INVALIDA",
+                    "No se puede pasar de " + actual + " a " + nuevo
+            );
+        }
+    }
+
     // Un estudiante solo puede consultar sus propias matriculas. Un docente solo
     // las de sus cursos. Un ADMIN ve todas.
     private void validarPuedeConsultar(Matricula matricula) {

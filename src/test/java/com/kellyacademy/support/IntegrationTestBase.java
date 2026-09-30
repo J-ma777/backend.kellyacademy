@@ -278,21 +278,35 @@ public abstract class IntegrationTestBase {
     // HELPERS DE ESTADO DE CURSO
     // ------------------------------------------------------------------------
 
-    // No hay endpoint administrativo de cambio de estado de curso aun (deuda #13, FASE 5).
-    // Los ITs que necesiten curso ACTIVO lo activan por repositorio.
+    // Cambia el estado de un curso usando el endpoint administrativo real
+    // (PATCH /api/cursos/{id}/estado, deuda #13 resuelta). Falla el test si el
+    // endpoint devuelve un status distinto a 200.
     protected void activarCurso(UUID cursoId) {
         cambiarEstadoCurso(cursoId, EstadoCurso.ACTIVO);
     }
 
+    // Saca el curso de circulacion via endpoint. Se usa ARCHIVADO (no BORRADOR):
+    // una vez que un curso esta ACTIVO, la maquina de estados no permite volver
+    // a BORRADOR. ARCHIVADO es la transicion natural de "desactivar" en produccion.
     protected void desactivarCurso(UUID cursoId) {
-        cambiarEstadoCurso(cursoId, EstadoCurso.BORRADOR);
+        cambiarEstadoCurso(cursoId, EstadoCurso.ARCHIVADO);
     }
 
     private void cambiarEstadoCurso(UUID cursoId, EstadoCurso estado) {
-        Curso curso = cursoRepository.findById(cursoId)
-                .orElseThrow(() -> new IllegalStateException("Curso no encontrado: " + cursoId));
-        curso.setEstado(estado);
-        cursoRepository.save(curso);
+        com.kellyacademy.course.dto.request.CambiarEstadoCursoRequest req =
+                new com.kellyacademy.course.dto.request.CambiarEstadoCursoRequest(estado);
+        org.springframework.http.ResponseEntity<Object> resp = rest.exchange(
+                "/api/cursos/" + cursoId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(req, headersConToken(adminToken)),
+                Object.class
+        );
+        if (!resp.getStatusCode().is2xxSuccessful()) {
+            throw new IllegalStateException(
+                    "Fallo cambiar estado del curso " + cursoId + " a " + estado
+                            + ": " + resp.getStatusCode()
+            );
+        }
     }
 
     // ------------------------------------------------------------------------

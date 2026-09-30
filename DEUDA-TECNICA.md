@@ -7,7 +7,6 @@ cuando se resuelva, indicando el commit.
 
 | #  | Deuda | Feature  | Resolver en | Estado |
 |----|---|----------|--------|---|
-| 4  | Endpoint de cambio de contrasena con validacion de contrasena actual | user     | FASE 5 | Pendiente |
 | 5  | Endpoint de cambio de correo con verificacion por email | user     | FASE 7 | Pendiente |
 | 7  | Warning de API deprecada en `JwtAuthenticationFilter` | security | FASE 6 | Pendiente |
 | 8  | Warning de Spring Security sobre `AuthenticationProvider` manual | security | FASE 6 | Pendiente |
@@ -16,7 +15,6 @@ cuando se resuelva, indicando el commit.
 | 16 | Reordenar `numero` de unidades o semanas — requiere endpoint de operacion masiva (no `PUT` individual) por restriccion `UNIQUE(curso_id, numero)` y `UNIQUE(unidad_id, numero)` | course | FASE 5 | Pendiente |
 | 19 | Cambiar `semanaId` de `Clase`, `Material` o `Tarea` (mover entre semanas) — requiere endpoint dedicado | course | FASE 5 | Pendiente |
 | 20 | Tests con H2 + `create-drop` no validan que las migraciones Flyway coincidan con las entidades. Cobertura real requiere Testcontainers con Postgres. | testing | FASE 6 | Pendiente |
-| 21 | Endpoint `PATCH /entregas/{id}/calificar` — setea `nota`, `retroalimentacion` y pasa `estado` a `CALIFICADA` con validacion de puntaje maximo de la `Tarea` | enrollment | FASE 5 | Pendiente |
 | 23 | Calculo automatico de `notaFinal` y `asistenciaPorcentaje` de `Matricula` a partir de entregas y asistencias | enrollment | FASE 6 | Pendiente |
 | 28 | `Conversacion` unique constraint no normaliza orden de participantes — (A,B) y (B,A) son filas distintas. Mitigacion actual: servicio normaliza orden por UUID antes de crear. Solucion robusta: indice funcional Postgres con LEAST/GREATEST (requiere Testcontainers). | communication | FASE 6 | Pendiente |
 | 34 | Endpoint dedicado `PATCH /conversaciones/{id}/asunto` si se necesita editar asunto post-creacion. | communication | FASE 5 | Pendiente |
@@ -29,7 +27,6 @@ cuando se resuelva, indicando el commit.
 | 57 | IntegrationTests levantan el contexto Spring completo (~20s por clase). Spring no reutiliza el contexto entre `UnidadControllerIT` y `SemanaControllerIT` pese a compartir configuracion. Optimizacion: revisar por que no se cachea, o migrar a `RestTestClient` (Spring Boot 4) que tiene mejor soporte. | testing | FASE 6 | Pendiente |
 | 58 | `Entrega` no distingue "asignacion del docente" de "envio del estudiante". Hoy se mezclan en un mismo registro (`enviadoAt` + `urlArchivo`). Si el dominio requiere separar los dos eventos (Submission con historial de intentos), FASE 6+. | enrollment | FASE 6 | Pendiente |
 | 59 | `EntregaService.eliminar` (ADMIN) no valida que la entrega no este `CALIFICADA`. Borrar una entrega calificada deja inconsistente el `notaFinal` futuro de la `Matricula`. | enrollment | FASE 5 | Pendiente |
-| 60 | `CrearEntregaRequest.urlArchivo` es `@NotBlank`. No permite pre-asignar tareas sin archivo inicial. Relajar a `@Nullable` + endpoint separado de subida cuando se implemente el flujo "docente asigna tarea sin archivo, estudiante sube despues". | enrollment | FASE 5 | Pendiente |
 | 61 | `Clase.fechaHora` nullable impide aplicar la validacion `CLASE_NO_IMPARTIDA` (#27) a clases sin fecha. Requiere decidir si `fechaHora` pasa a obligatoria o si se modela "clase impartida" con un flag explicito. | attendance | FASE 5 | Pendiente |
 | 62 | `Asistencia.estado` no dispara `Notificacion` al estudiante cuando se registra AUSENTE / TARDE / JUSTIFICADO. Depende de #36. | attendance | FASE 5 | Pendiente |
 | 63 | No hay endpoint de registro masivo de asistencia por clase (`POST /api/asistencias/masivo` con lista de estudiantes). Hoy se registra uno por uno. | attendance | FASE 5 | Pendiente |
@@ -42,52 +39,59 @@ cuando se resuelva, indicando el commit.
 | 72 | Usuario "zombi": si se le asignan solo roles sin permisos efectivos, puede autenticarse pero no puede hacer nada. La regla `@NotEmpty` en `AsignarRolesUsuarioRequest` no lo evita. Evaluar minimo obligatorio o bloqueo en login. | user | FASE 6 | Pendiente |
 | 73 | `BORRADOR -> ACTIVO` en curso no valida contenido minimo (unidades, semanas). Requiere decision de producto sobre "curso publicable". | course | FASE 6 | Pendiente |
 | 75 | `CursoService.eliminar` permite eliminar un curso en cualquier estado, incluyendo ACTIVO con estudiantes matriculados. Deberia validar estado (no eliminar ACTIVO/FINALIZADO). | course | FASE 5/6 | Pendiente |
+| 76 | `Entrega` no registra `calificadoAt` ni `calificadoPor`. Requiere migracion Flyway + `@ManyToOne` a `Usuario`. Util para auditoria de quien califico y cuando. | enrollment | FASE 6 | Pendiente |
+| 77 | `ActualizarEntregaRequest.urlArchivo` sigue siendo `@NotBlank`. Si en el futuro el estudiante puede editar sin resubir archivo (ej. corregir metadatos), relajar. | enrollment | FASE 6 | Pendiente |
+| 78 | Endpoint administrativo de reset de contrasena: ADMIN fuerza nueva contrasena sin validar la actual (el admin no la conoce). Requiere decidir si se notifica al usuario afectado y si se registra auditoria. | user | FASE 6 | Pendiente |
+| 79 | Al cambiar contrasena, los JWT emitidos previamente siguen siendo validos hasta su expiracion natural. Requiere lista negra de tokens (Redis o tabla `token_blacklist`) o `tokenVersion` en `Usuario`. Fuera de scope de FASE 5. | security | FASE 6+ | Pendiente |
 
 ## Resueltos
 
-| #  | Deuda | Commit | Fecha |
-|----|---|--|---|
-| 1  | `Usuario.roles` con `FetchType.EAGER` — riesgo N+1 en listados paginados | refactor/user-lazy-fetching | 2026-09-18 |
-| 2  | `Rol.permisos` con `FetchType.EAGER` — agrava el punto 1 | refactor/user-lazy-fetching | 2026-09-18 |
-| 3  | Endpoint administrativo `PATCH /api/usuarios/{id}/estado` (ACTIVO / INACTIVO / BLOQUEADO). Solo ADMINISTRADOR. Valida que un admin no pueda cambiarse su propio estado y que el nuevo estado sea distinto al actual. | d3183b9 | 2026-09-29 |
-| 6  | Endpoint administrativo `PUT /api/usuarios/{id}/roles` con semantica de reemplazo total. Solo ADMINISTRADOR. Valida que un admin no pueda modificarse sus propios roles, que todos los roles existan y que el set no este vacio. | 3a743a7 | 2026-09-29 |
-| 10 | RolResponse anida permisos — revisar cuando Rol.permisos pase a LAZY | a5887b1 | 2026-09-19 |
-| 11 | `CursoResponse` embebe `UsuarioResumenResponse` — dispara EAGER de `Usuario.roles` y `Rol.permisos` | e459b96 | 2026-09-19 |
-| 13 | Endpoint administrativo `PATCH /api/cursos/{id}/estado`. Maquina de estados: BORRADOR -> ACTIVO | ARCHIVADO; ACTIVO -> FINALIZADO | ARCHIVADO; FINALIZADO -> ARCHIVADO; ARCHIVADO terminal. | b867bb5 | 2026-09-29 |
-| 14 | Validar que `docenteId` tenga rol DOCENTE antes de asignarlo a un curso | e459b96 | 2026-09-19 |
-| 15 | `esActual` de `Semana` no se puede cambiar via `PUT` — requiere endpoint `PATCH /semanas/{id}/marcar-actual` | 69e4b1b | 2026-09-20 |
-| 17 | `Material` permite crear sin `urlArchivo` ni `urlExterno` — validar "al menos una URL" en servicio | PR #6 | 2026-09-20 |
-| 18 | `Clase.urlVivo` y `urlGrabacion` — no hay validacion de formato de URL (solo longitud) | PR #6 | 2026-09-20 |
-| 22 | Endpoint administrativo `PATCH /api/matriculas/{id}/estado`. Maquina de estados: ACTIVA -> COMPLETADA | RIESGO | ABANDONADA; RIESGO -> ACTIVA | COMPLETADA | ABANDONADA; COMPLETADA y ABANDONADA terminales. | 028818a | 2026-09-29 |
-| 24 | Validar en servicio que no se pueda re-subir archivo de `Entrega` si `estado = CALIFICADA` | PR #13 | 2026-09-20 |
-| 25 | `Entrega.estado` (PENDIENTE / TARDE) se calcula comparando `enviadoAt` con `Tarea.fechaLimite` en el servicio de creacion | PR #13 | 2026-09-20 |
-| 26 | Validar en servicio que `estudianteId` este matriculado en el curso de la `Clase` antes de registrar `Asistencia` | 1e443a8 | 2026-09-20 |
-| 27 | Validar en servicio que `claseId` corresponda a una clase ya impartida (`fechaHora <= now()`) antes de registrar asistencia | 1e443a8 | 2026-09-20 |
-| 29 | Validar en servicio que ambos participantes de una `Conversacion` pertenezcan al `Curso` referenciado (docente del curso o estudiante matriculado) | 11004db | 2026-09-20 |
-| 30 | Validar en servicio que `otroParticipanteId != usuarioAutenticado.id` al crear conversacion | 11004db | 2026-09-20 |
-| 31 | Endpoint dedicado `PATCH /anuncios/{id}/archivar` para cambiar `activo` | 66f364c | 2026-09-20 |
-| 32 | Endpoint dedicado `PATCH /mensajes/{id}/leer` y `PATCH /conversaciones/{id}/leer-todos` para marcar `leido`. Nota: la ruta real quedo como `PATCH /conversaciones/{cid}/mensajes/{mid}/leer` para mantener consistencia REST anidada | 11004db | 2026-09-20 |
-| 33 | Validar en servicio que el usuario autenticado sea participante de la `Conversacion` antes de insertar `Mensaje` | 11004db | 2026-09-20 |
-| 35 | Endpoint `PATCH /notificaciones/{id}/leer` y `PATCH /notificaciones/leer-todas` con validacion de que la notificacion pertenece al usuario autenticado | 150ded9 | 2026-09-20 |
-| 36 | `NotificacionService.crear(...)` interno para que otros servicios generen notificaciones. Sin endpoint publico de creacion | 150ded9 | 2026-09-20 |
-| 37 | Endpoints `GET /notificaciones`, `GET /notificaciones/no-leidas` y `GET /notificaciones/count-no-leidas` filtrados por usuario autenticado | 150ded9 | 2026-09-20 |
-| 38 | Validar en servicio que `Evento.fin > Evento.inicio` cuando `fin != null`. | ca9084f | 2026-09-20 |
-| 39 | Validar en servicio que `DisponibilidadTutoria.horaFin > horaInicio`. | 5d7739f | 2026-09-20 |
-| 40 | Validar en servicio que no se solapen bloques de disponibilidad del mismo docente y dia. Requiere query de interseccion. | 5d7739f | 2026-09-20 |
-| 41 | Validar en servicio que el usuario autenticado sea el docente dueno o ADMIN al crear/modificar `DisponibilidadTutoria`. | 5d7739f | 2026-09-20 |
-| 42 | Validar en servicio que al crear `Evento`, si `cursoId != null`, el usuario pertenezca al curso (docente o estudiante matriculado). | ca9084f | 2026-09-20 |
-| 43 | Endpoint `PATCH /api/tutorias/{id}/estado`. Maquina de estados: PENDIENTE -> CONFIRMADA | CANCELADA; CONFIRMADA -> COMPLETADA | CANCELADA; COMPLETADA y CANCELADA terminales. Autorizacion por transicion: cualquier participante puede confirmar/cancelar; solo el docente o ADMIN puede marcar COMPLETADA. | 16595e5 | 2026-09-29 |
-| 44 | Validar en servicio que `fecha` y `duracionMinutos` de `Tutoria` solo sean editables cuando `estado = PENDIENTE`. | a772ec6 | 2026-09-20 |
-| 45 | Validar en servicio que `Tutoria.fecha > now()` al crear. | a772ec6 | 2026-09-20 |
-| 46 | Validar en servicio que el usuario autenticado sea el estudiante, el docente o ADMIN al crear/modificar `Tutoria`. | a772ec6 | 2026-09-20 |
-| 49 | Validar en servicio que `RecursoBiblioteca` tenga al menos `urlArchivo` o `urlExterno`. Sin ninguna URL el recurso no es descargable. | 8ca397b | 2026-09-20 |
-| 51 | Validar en servicio que `urlExterno` tenga formato de URL valido (no solo longitud). | 8ca397b | 2026-09-20 |
-| 52 | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |
-| 53 | Auditar mappers que accedan a `Usuario.roles` o `Rol.permisos` | a5887b1 | 2026-09-19 |
-| 64 | `IntegrationTestBase.limpiarTablas()` escalaba manualmente: cada entidad nueva requeria agregar su `deleteAll` en orden inverso a las FKs. Se reemplazo por descubrimiento de tablas via metamodelo de Hibernate (`EntityManagerFactory.getMetamodel()`) y `TRUNCATE TABLE <tabla>` con `SET REFERENTIAL_INTEGRITY FALSE/TRUE` alrededor (H2 no soporta `TRUNCATE ... CASCADE`). | 3ab9edc | 2026-09-29 |
-| 67 | `AnuncioService` no notifica al editar un anuncio (solo al crear). Decision de producto: ¿editar y re-notificar? | 66f364c | 2026-09-20 |
-| 69 | Surefire no inclui­a las clases `*IT` en su patron por defecto (`*Test`, `*Tests`, `Test*`). Los 16 `*ControllerIT` y `LmsBackendApplicationTests` nunca se ejecutaban con `./mvnw test` ni `./mvnw clean test`. Se agrego configuracion explicita de `maven-surefire-plugin` con `<includes>` para `*Test`, `*Tests` y `*IT`. Baseline real: 308 tests verdes (149 unitarios + 159 integracion). | 3ab9edc | 2026-09-29 |
-| 74 | `IntegrationTestBase.activarCurso`/`desactivarCurso` mutaban por repositorio. Refactor a usar el endpoint real `PATCH /api/cursos/{id}/estado`. `desactivarCurso` pasa a ARCHIVADO (antes BORRADOR), porque `ACTIVO -> BORRADOR` ya no es valido con la maquina de estados de #13. | 028818a | 2026-09-29 |
+| #    | Deuda | Commit | Fecha |
+|------|---|--|---|
+| 1    | `Usuario.roles` con `FetchType.EAGER` — riesgo N+1 en listados paginados | refactor/user-lazy-fetching | 2026-09-18 |
+| 2    | `Rol.permisos` con `FetchType.EAGER` — agrava el punto 1 | refactor/user-lazy-fetching | 2026-09-18 |
+| 3    | Endpoint administrativo `PATCH /api/usuarios/{id}/estado` (ACTIVO / INACTIVO / BLOQUEADO). Solo ADMINISTRADOR. Valida que un admin no pueda cambiarse su propio estado y que el nuevo estado sea distinto al actual. | d3183b9 | 2026-09-29 |
+| 4    | Endpoint `PATCH /api/usuarios/{id}/contrasena`. Cambio de contrasena del propio usuario autenticado con validacion de contrasena actual via `passwordEncoder.matches`. Reglas de fortaleza identicas a `CrearUsuarioRequest` (min 8, max 72, al menos una letra y un numero). Rechaza no-op (`CONTRASENA_SIN_CAMBIOS`) y actual incorrecta (`CONTRASENA_ACTUAL_INCORRECTA`). Respuesta 204. Solo el propio usuario: ADMIN no puede forzar reset por este endpoint. | 70e4362 | 2026-09-30 |
+| 6    | Endpoint administrativo `PUT /api/usuarios/{id}/roles` con semantica de reemplazo total. Solo ADMINISTRADOR. Valida que un admin no pueda modificarse sus propios roles, que todos los roles existan y que el set no este vacio. | 3a743a7 | 2026-09-29 |
+| 10   | RolResponse anida permisos — revisar cuando Rol.permisos pase a LAZY | a5887b1 | 2026-09-19 |
+| 11   | `CursoResponse` embebe `UsuarioResumenResponse` — dispara EAGER de `Usuario.roles` y `Rol.permisos` | e459b96 | 2026-09-19 |
+| 13   | Endpoint administrativo `PATCH /api/cursos/{id}/estado`. Maquina de estados: BORRADOR -> ACTIVO | ARCHIVADO; ACTIVO -> FINALIZADO | ARCHIVADO; FINALIZADO -> ARCHIVADO; ARCHIVADO terminal. | b867bb5 | 2026-09-29 |
+| 14   | Validar que `docenteId` tenga rol DOCENTE antes de asignarlo a un curso | e459b96 | 2026-09-19 |
+| 15   | `esActual` de `Semana` no se puede cambiar via `PUT` — requiere endpoint `PATCH /semanas/{id}/marcar-actual` | 69e4b1b | 2026-09-20 |
+| 17   | `Material` permite crear sin `urlArchivo` ni `urlExterno` — validar "al menos una URL" en servicio | PR #6 | 2026-09-20 |
+| 18   | `Clase.urlVivo` y `urlGrabacion` — no hay validacion de formato de URL (solo longitud) | PR #6 | 2026-09-20 |
+| 21   | Endpoint `PATCH /api/entregas/{id}/calificar`. Setea `nota` + `retroalimentacion` y transiciona `estado` a `CALIFICADA`. Valida `nota` en rango `[0, puntajeMaximo de la Tarea]`. Autoriza solo al docente dueno del curso de la tarea o ADMIN. Re-calificacion permitida (sobrescribe). `enviadoAt` no se toca. | 70e4362 | 2026-09-30 |
+| 22   | Endpoint administrativo `PATCH /api/matriculas/{id}/estado`. Maquina de estados: ACTIVA -> COMPLETADA | RIESGO | ABANDONADA; RIESGO -> ACTIVA | COMPLETADA | ABANDONADA; COMPLETADA y ABANDONADA terminales. | 028818a | 2026-09-29 |
+| 24   | Validar en servicio que no se pueda re-subir archivo de `Entrega` si `estado = CALIFICADA` | PR #13 | 2026-09-20 |
+| 25   | `Entrega.estado` (PENDIENTE / TARDE) se calcula comparando `enviadoAt` con `Tarea.fechaLimite` en el servicio de creacion | PR #13 | 2026-09-20 |
+| 26   | Validar en servicio que `estudianteId` este matriculado en el curso de la `Clase` antes de registrar `Asistencia` | 1e443a8 | 2026-09-20 |
+| 27   | Validar en servicio que `claseId` corresponda a una clase ya impartida (`fechaHora <= now()`) antes de registrar asistencia | 1e443a8 | 2026-09-20 |
+| 29   | Validar en servicio que ambos participantes de una `Conversacion` pertenezcan al `Curso` referenciado (docente del curso o estudiante matriculado) | 11004db | 2026-09-20 |
+| 30   | Validar en servicio que `otroParticipanteId != usuarioAutenticado.id` al crear conversacion | 11004db | 2026-09-20 |
+| 31   | Endpoint dedicado `PATCH /anuncios/{id}/archivar` para cambiar `activo` | 66f364c | 2026-09-20 |
+| 32   | Endpoint dedicado `PATCH /mensajes/{id}/leer` y `PATCH /conversaciones/{id}/leer-todos` para marcar `leido`. Nota: la ruta real quedo como `PATCH /conversaciones/{cid}/mensajes/{mid}/leer` para mantener consistencia REST anidada | 11004db | 2026-09-20 |
+| 33   | Validar en servicio que el usuario autenticado sea participante de la `Conversacion` antes de insertar `Mensaje` | 11004db | 2026-09-20 |
+| 35   | Endpoint `PATCH /notificaciones/{id}/leer` y `PATCH /notificaciones/leer-todas` con validacion de que la notificacion pertenece al usuario autenticado | 150ded9 | 2026-09-20 |
+| 36   | `NotificacionService.crear(...)` interno para que otros servicios generen notificaciones. Sin endpoint publico de creacion | 150ded9 | 2026-09-20 |
+| 37   | Endpoints `GET /notificaciones`, `GET /notificaciones/no-leidas` y `GET /notificaciones/count-no-leidas` filtrados por usuario autenticado | 150ded9 | 2026-09-20 |
+| 38   | Validar en servicio que `Evento.fin > Evento.inicio` cuando `fin != null`. | ca9084f | 2026-09-20 |
+| 39   | Validar en servicio que `DisponibilidadTutoria.horaFin > horaInicio`. | 5d7739f | 2026-09-20 |
+| 40   | Validar en servicio que no se solapen bloques de disponibilidad del mismo docente y dia. Requiere query de interseccion. | 5d7739f | 2026-09-20 |
+| 41   | Validar en servicio que el usuario autenticado sea el docente dueno o ADMIN al crear/modificar `DisponibilidadTutoria`. | 5d7739f | 2026-09-20 |
+| 42   | Validar en servicio que al crear `Evento`, si `cursoId != null`, el usuario pertenezca al curso (docente o estudiante matriculado). | ca9084f | 2026-09-20 |
+| 43   | Endpoint `PATCH /api/tutorias/{id}/estado`. Maquina de estados: PENDIENTE -> CONFIRMADA | CANCELADA; CONFIRMADA -> COMPLETADA | CANCELADA; COMPLETADA y CANCELADA terminales. Autorizacion por transicion: cualquier participante puede confirmar/cancelar; solo el docente o ADMIN puede marcar COMPLETADA. | 16595e5 | 2026-09-29 |
+| 44   | Validar en servicio que `fecha` y `duracionMinutos` de `Tutoria` solo sean editables cuando `estado = PENDIENTE`. | a772ec6 | 2026-09-20 |
+| 45   | Validar en servicio que `Tutoria.fecha > now()` al crear. | a772ec6 | 2026-09-20 |
+| 46   | Validar en servicio que el usuario autenticado sea el estudiante, el docente o ADMIN al crear/modificar `Tutoria`. | a772ec6 | 2026-09-20 |
+| 49   | Validar en servicio que `RecursoBiblioteca` tenga al menos `urlArchivo` o `urlExterno`. Sin ninguna URL el recurso no es descargable. | 8ca397b | 2026-09-20 |
+| 51   | Validar en servicio que `urlExterno` tenga formato de URL valido (no solo longitud). | 8ca397b | 2026-09-20 |
+| 52   | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |
+| 53   | Auditar mappers que accedan a `Usuario.roles` o `Rol.permisos` | a5887b1 | 2026-09-19 |
+| 60   | `CrearEntregaRequest.urlArchivo` pasa a nullable. Permite al docente crear la `Entrega` del resto de integrantes de un trabajo en equipo cuando un solo estudiante sube el archivo. La validacion de formato de URL se aplica solo si el valor es no-null. | 70e4362 | 2026-09-30 |
+| 64   | `IntegrationTestBase.limpiarTablas()` escalaba manualmente: cada entidad nueva requeria agregar su `deleteAll` en orden inverso a las FKs. Se reemplazo por descubrimiento de tablas via metamodelo de Hibernate (`EntityManagerFactory.getMetamodel()`) y `TRUNCATE TABLE <tabla>` con `SET REFERENTIAL_INTEGRITY FALSE/TRUE` alrededor (H2 no soporta `TRUNCATE ... CASCADE`). | 3ab9edc | 2026-09-29 |
+| 67   | `AnuncioService` no notifica al editar un anuncio (solo al crear). Decision de producto: ¿editar y re-notificar? | 66f364c | 2026-09-20 |
+| 69   | Surefire no inclui­a las clases `*IT` en su patron por defecto (`*Test`, `*Tests`, `Test*`). Los 16 `*ControllerIT` y `LmsBackendApplicationTests` nunca se ejecutaban con `./mvnw test` ni `./mvnw clean test`. Se agrego configuracion explicita de `maven-surefire-plugin` con `<includes>` para `*Test`, `*Tests` y `*IT`. Baseline real: 308 tests verdes (149 unitarios + 159 integracion). | 3ab9edc | 2026-09-29 |
+| 74   | `IntegrationTestBase.activarCurso`/`desactivarCurso` mutaban por repositorio. Refactor a usar el endpoint real `PATCH /api/cursos/{id}/estado`. `desactivarCurso` pasa a ARCHIVADO (antes BORRADOR), porque `ACTIVO -> BORRADOR` ya no es valido con la maquina de estados de #13. | 028818a | 2026-09-29 |
 
 ### Decisiones por diseno (no son deuda)
 
@@ -129,3 +133,7 @@ cuando se resuelva, indicando el commit.
 - `MensajeService.crear` actualiza `Conversacion.ultimoMensajeAt` con la misma marca temporal del mensaje (`enviadoAt`). No hay update asincrono: se hace en la misma transaccion para evitar race conditions.
 - `MensajeService.crear` notifica al otro participante via `NotificacionService.crear` con tipo `MENSAJE`. NO notifica al remitente. Si la conversacion tiene un solo participante (caso imposible por validacion de auto-conversacion), no notifica.
 - `Mensaje` no se edita ni se borra por el usuario. Solo ADMIN puede eliminar. Alineado con la decision de `Notificacion`: el mensaje es un registro de comunicacion, no un campo mutable.
+- `Entrega.estado` transiciona a `CALIFICADA` via endpoint dedicado (`PATCH /entregas/{id}/calificar`), no via `PUT`. La re-calificacion se permite para corregir errores del docente: `nota` y `retroalimentacion` se sobrescriben, `estado` queda `CALIFICADA` terminal, `enviadoAt` no se toca (es la marca original de envio, no de calificacion). No se registra `calificadoAt` ni `calificadoPor` en este slice: merece su propia deuda (#76) por requerir migracion Flyway.
+- `CrearEntregaRequest.urlArchivo` es nullable desde el slice #21/#60: el docente puede crear la `Entrega` de integrantes de un trabajo en equipo sin URL propia, cuando un solo estudiante sube el archivo con todos los nombres. `ActualizarEntregaRequest.urlArchivo` sigue `@NotBlank` porque el flujo "estudiante sube archivo" siempre requiere URL (#77).
+- El cambio de contrasena (`PATCH /usuarios/{id}/contrasena`) exige conocer la actual como prueba de identidad adicional al JWT. Defensa en profundidad contra robo de token. Un ADMIN no puede forzar reset por este endpoint: si se necesita, va en endpoint administrativo separado (#78).
+- Los JWT emitidos antes del cambio de contrasena siguen siendo validos hasta su expiracion natural. La invalidacion de tokens (lista negra o `tokenVersion`) queda fuera del scope de FASE 5 (#79).

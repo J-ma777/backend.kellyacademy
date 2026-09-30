@@ -1,6 +1,7 @@
 package com.kellyacademy.calendar.controller;
 
 import com.kellyacademy.calendar.dto.request.ActualizarTutoriaRequest;
+import com.kellyacademy.calendar.dto.request.CambiarEstadoTutoriaRequest;
 import com.kellyacademy.calendar.dto.request.CrearTutoriaRequest;
 import com.kellyacademy.calendar.dto.response.TutoriaResponse;
 import com.kellyacademy.calendar.dto.response.TutoriaResumenResponse;
@@ -55,6 +56,13 @@ public class TutoriaController {
             @PathVariable UUID id,
             @Valid @RequestBody ActualizarTutoriaRequest request) {
         return ResponseEntity.ok(tutoriaService.actualizar(id, request));
+    }
+
+    @PatchMapping("/{id}/estado")
+    public ResponseEntity<TutoriaResponse> cambiarEstado(
+            @PathVariable UUID id,
+            @Valid @RequestBody CambiarEstadoTutoriaRequest request) {
+        return ResponseEntity.ok(tutoriaService.cambiarEstado(id, request.estado()));
     }
 
     @DeleteMapping("/{id}")

@@ -1,8 +1,10 @@
 package com.kellyacademy.calendar.controller;
 
 import com.kellyacademy.calendar.dto.request.ActualizarTutoriaRequest;
+import com.kellyacademy.calendar.dto.request.CambiarEstadoTutoriaRequest;
 import com.kellyacademy.calendar.dto.request.CrearTutoriaRequest;
 import com.kellyacademy.calendar.dto.response.TutoriaResponse;
+import com.kellyacademy.calendar.enums.EstadoTutoria;
 import com.kellyacademy.shared.exception.ErrorResponse;
 import com.kellyacademy.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
@@ -235,5 +237,162 @@ class TutoriaControllerIT extends IntegrationTestBase {
                 deleteWithBody("/api/tutorias/" + creada.id(), estudianteToken, ErrorResponse.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // ------------------------------------------------------------------
+    // cambiarEstado
+    // ------------------------------------------------------------------
+
+    private UUID crearTutoriaPendiente() {
+        TutoriaResponse creada = Objects.requireNonNull(
+                post("/api/tutorias", estudianteToken,
+                        req(estudianteId, docenteDuenoId, LocalDateTime.now().plusDays(1)),
+                        TutoriaResponse.class).getBody()
+        );
+        return creada.id();
+    }
+
+    private ResponseEntity<TutoriaResponse> patchEstado(
+            UUID tutoriaId, EstadoTutoria estado, String token) {
+        CambiarEstadoTutoriaRequest body = new CambiarEstadoTutoriaRequest(estado);
+        return rest.exchange(
+                "/api/tutorias/" + tutoriaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(body, headersConToken(token)),
+                TutoriaResponse.class
+        );
+    }
+
+    private ResponseEntity<ErrorResponse> patchEstadoError(
+            UUID tutoriaId, EstadoTutoria estado, String token) {
+        CambiarEstadoTutoriaRequest body = new CambiarEstadoTutoriaRequest(estado);
+        return rest.exchange(
+                "/api/tutorias/" + tutoriaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(body, headersConToken(token)),
+                ErrorResponse.class
+        );
+    }
+
+    @Test
+    void cambiarEstado_pendienteAConfirmada_comoEstudiante_200() {
+        UUID tutoriaId = crearTutoriaPendiente();
+
+        ResponseEntity<TutoriaResponse> resp = patchEstado(
+                tutoriaId, EstadoTutoria.CONFIRMADA, estudianteToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).estado()).isEqualTo(EstadoTutoria.CONFIRMADA);
+    }
+
+    @Test
+    void cambiarEstado_pendienteAConfirmada_comoDocente_200() {
+        UUID tutoriaId = crearTutoriaPendiente();
+
+        ResponseEntity<TutoriaResponse> resp = patchEstado(
+                tutoriaId, EstadoTutoria.CONFIRMADA, docenteDuenoToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).estado()).isEqualTo(EstadoTutoria.CONFIRMADA);
+    }
+
+    @Test
+    void cambiarEstado_confirmadaACompletada_comoDocente_200() {
+        UUID tutoriaId = crearTutoriaPendiente();
+        patchEstado(tutoriaId, EstadoTutoria.CONFIRMADA, docenteDuenoToken);
+
+        ResponseEntity<TutoriaResponse> resp = patchEstado(
+                tutoriaId, EstadoTutoria.COMPLETADA, docenteDuenoToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).estado()).isEqualTo(EstadoTutoria.COMPLETADA);
+    }
+
+    @Test
+    void cambiarEstado_confirmadaACompletada_comoEstudiante_403() {
+        UUID tutoriaId = crearTutoriaPendiente();
+        patchEstado(tutoriaId, EstadoTutoria.CONFIRMADA, docenteDuenoToken);
+
+        ResponseEntity<ErrorResponse> resp = patchEstadoError(
+                tutoriaId, EstadoTutoria.COMPLETADA, estudianteToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void cambiarEstado_pendienteACancelada_comoEstudiante_200() {
+        UUID tutoriaId = crearTutoriaPendiente();
+
+        ResponseEntity<TutoriaResponse> resp = patchEstado(
+                tutoriaId, EstadoTutoria.CANCELADA, estudianteToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).estado()).isEqualTo(EstadoTutoria.CANCELADA);
+    }
+
+    @Test
+    void cambiarEstado_mismoEstado_400() {
+        UUID tutoriaId = crearTutoriaPendiente();
+
+        ResponseEntity<ErrorResponse> resp = patchEstadoError(
+                tutoriaId, EstadoTutoria.PENDIENTE, estudianteToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo()).isEqualTo("ESTADO_SIN_CAMBIOS");
+    }
+
+    @Test
+    void cambiarEstado_completadaAConfirmada_400() {
+        UUID tutoriaId = crearTutoriaPendiente();
+        patchEstado(tutoriaId, EstadoTutoria.CONFIRMADA, docenteDuenoToken);
+        patchEstado(tutoriaId, EstadoTutoria.COMPLETADA, docenteDuenoToken);
+
+        ResponseEntity<ErrorResponse> resp = patchEstadoError(
+                tutoriaId, EstadoTutoria.CONFIRMADA, docenteDuenoToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo()).isEqualTo("TRANSICION_ESTADO_INVALIDA");
+    }
+
+    @Test
+    void cambiarEstado_comoTercero_403() {
+        UUID tutoriaId = crearTutoriaPendiente();
+
+        ResponseEntity<ErrorResponse> resp = patchEstadoError(
+                tutoriaId, EstadoTutoria.CONFIRMADA, terceroToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void cambiarEstado_comoAdmin_200() {
+        UUID tutoriaId = crearTutoriaPendiente();
+
+        ResponseEntity<TutoriaResponse> resp = patchEstado(
+                tutoriaId, EstadoTutoria.CONFIRMADA, adminToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void cambiarEstado_tutoriaInexistente_404() {
+        ResponseEntity<ErrorResponse> resp = patchEstadoError(
+                UUID.randomUUID(), EstadoTutoria.CONFIRMADA, adminToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void cambiarEstado_sinEstado_400() {
+        UUID tutoriaId = crearTutoriaPendiente();
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/tutorias/" + tutoriaId + "/estado",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>("{}", headersConToken(estudianteToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }

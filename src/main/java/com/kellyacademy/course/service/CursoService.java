@@ -114,6 +114,48 @@ public class CursoService {
         cursoRepository.delete(curso);
     }
 
+    public CursoResponse cambiarEstado(UUID id, EstadoCurso nuevoEstado) {
+
+        Curso curso = cursoRepository.findWithDocenteById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+
+        EstadoCurso actual = curso.getEstado();
+
+        if (actual == nuevoEstado) {
+            throw new BusinessException(
+                    "ESTADO_SIN_CAMBIOS",
+                    "El curso ya se encuentra en estado " + nuevoEstado
+            );
+        }
+
+        validarTransicionEstado(actual, nuevoEstado);
+
+        curso.setEstado(nuevoEstado);
+
+        return cursoMapper.toResponse(curso);
+    }
+
+    // Maquina de estados:
+    //   BORRADOR  -> ACTIVO, ARCHIVADO
+    //   ACTIVO    -> FINALIZADO, ARCHIVADO
+    //   FINALIZADO -> ARCHIVADO
+    //   ARCHIVADO  -> (terminal)
+    private void validarTransicionEstado(EstadoCurso actual, EstadoCurso nuevo) {
+        boolean permitida = switch (actual) {
+            case BORRADOR -> nuevo == EstadoCurso.ACTIVO || nuevo == EstadoCurso.ARCHIVADO;
+            case ACTIVO -> nuevo == EstadoCurso.FINALIZADO || nuevo == EstadoCurso.ARCHIVADO;
+            case FINALIZADO -> nuevo == EstadoCurso.ARCHIVADO;
+            case ARCHIVADO -> false;
+        };
+
+        if (!permitida) {
+            throw new BusinessException(
+                    "TRANSICION_ESTADO_INVALIDA",
+                    "No se puede pasar de " + actual + " a " + nuevo
+            );
+        }
+    }
+
     // Autorizacion fina: solo el docente dueno del curso o un ADMIN pueden modificar/eliminar.
     private void validarPropietarioOAdmin(Curso curso) {
         if (SecurityUtils.esAdmin()) {

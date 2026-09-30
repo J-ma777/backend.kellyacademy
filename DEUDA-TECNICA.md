@@ -6,12 +6,12 @@ cuando se resuelva, indicando el commit.
 ## Pendientes
 
 | #  | Deuda | Feature  | Resolver en | Estado |
-|----|---|----------|-------------|---|
-| 4  | Endpoint de cambio de contrasena con validacion de contrasena actual | user     | FASE 5      | Pendiente |
-| 5  | Endpoint de cambio de correo con verificacion por email | user     | FASE 7      | Pendiente |
-| 7  | Warning de API deprecada en `JwtAuthenticationFilter` | security | FASE 6      | Pendiente |
-| 8  | Warning de Spring Security sobre `AuthenticationProvider` manual | security | FASE 6      | Pendiente |
-| 9  | Warning de Mockito self-attaching | testing  | FASE 6      | Pendiente |
+|----|---|----------|--------|---|
+| 4  | Endpoint de cambio de contrasena con validacion de contrasena actual | user     | FASE 5 | Pendiente |
+| 5  | Endpoint de cambio de correo con verificacion por email | user     | FASE 7 | Pendiente |
+| 7  | Warning de API deprecada en `JwtAuthenticationFilter` | security | FASE 6 | Pendiente |
+| 8  | Warning de Spring Security sobre `AuthenticationProvider` manual | security | FASE 6 | Pendiente |
+| 9  | Warning de Mockito self-attaching | testing  | FASE 6 | Pendiente |
 | 12 | Endpoint administrativo para cambiar docente de un curso | course | FASE 5 | Pendiente |
 | 16 | Reordenar `numero` de unidades o semanas — requiere endpoint de operacion masiva (no `PUT` individual) por restriccion `UNIQUE(curso_id, numero)` y `UNIQUE(unidad_id, numero)` | course | FASE 5 | Pendiente |
 | 19 | Cambiar `semanaId` de `Clase`, `Material` o `Tarea` (mover entre semanas) — requiere endpoint dedicado | course | FASE 5 | Pendiente |
@@ -24,7 +24,7 @@ cuando se resuelva, indicando el commit.
 | 48 | Validar en servicio que no exista solapamiento con otras tutorias CONFIRMADAS del mismo docente o estudiante. | calendar | FASE 6 | Pendiente |
 | 50 | Endpoint `POST /recursos/{id}/descargar` que incremente `contadorDescargas` y retorne la URL. Requiere `@Modifying` query o `@Transactional` con incremento atomico. | library | FASE 5 | Pendiente |
 | 54 | Documentar en README los dos flujos de arranque: (a) IDE con `.env` inyectado, (b) terminal con `./mvnw spring-boot:run` que carga `.env` via `spring.config.import`. | infrastructure | FASE 5 | Pendiente |
-| 55 | Auditar uso de `APP_CORS_ALLOWED_ORIGINS` — confirmar que `SecurityConfig` lo lee desde properties y no esta hardcodeado. | security | FASE 4 | Pendiente |
+| 55 | Auditar uso de `APP_CORS_ALLOWED_ORIGINS` — confirmar que `SecurityConfig` lo lee desde properties y no esta hardcodeado. | security | FASE 5 | Pendiente |
 | 56 | `@EntityGraph(attributePaths = {"docente"})` en `CursoRepository.findAll(Specification, Pageable)` y `findWithDocenteById` carga la entidad `Usuario` completa, incluyendo `contrasena`, para exponer solo 6 campos escalares en `UsuarioResumenResponse`. Optimizable con proyeccion. Riesgo teorico: solo si se activa `org.hibernate.orm.jdbc.bind=TRACE` en produccion, los valores bind (incluido el hash) se imprimen en logs. | course | FASE 6 | Pendiente |
 | 57 | IntegrationTests levantan el contexto Spring completo (~20s por clase). Spring no reutiliza el contexto entre `UnidadControllerIT` y `SemanaControllerIT` pese a compartir configuracion. Optimizacion: revisar por que no se cachea, o migrar a `RestTestClient` (Spring Boot 4) que tiene mejor soporte. | testing | FASE 6 | Pendiente |
 | 58 | `Entrega` no distingue "asignacion del docente" de "envio del estudiante". Hoy se mezclan en un mismo registro (`enviadoAt` + `urlArchivo`). Si el dominio requiere separar los dos eventos (Submission con historial de intentos), FASE 6+. | enrollment | FASE 6 | Pendiente |
@@ -37,7 +37,6 @@ cuando se resuelva, indicando el commit.
 | 66 | `AnuncioService.crear` notifica a estudiantes matriculados uno por uno dentro de un mismo `@Transactional`. Con cursos grandes (>100 estudiantes) esto genera N inserts secuenciales. Considerar batch insert o job asincrono. | communication | FASE 6 | Pendiente |
 | 67 | `ConversacionRepository.findByCursoIsNullAndParticipante1IdAndParticipante2Id` no está cubierto por índice único funcional (solo el caso con curso). Dos hilos concurrentes podrían crear conversaciones duplicadas sin curso. Mitigación actual: el servicio normaliza orden. Solución robusta: índice funcional Postgres con LEAST/GREATEST + `curso_id NULLS NOT DISTINCT`. Requiere Testcontainers. | communication | FASE 6 | Pendiente |
 | 68 | `MensajeController.listar` pagina mensajes con sort `enviadoAt` ascendente. Conversaciones largas obligan al cliente a paginar hacia adelante. Considerar endpoint alternativo de "últimos N mensajes" para carga inicial del chat. | communication | FASE 5 | Pendiente |
-| 69 | Surefire no inclui­a las clases `*IT` en su patron por defecto (`*Test`, `*Tests`, `Test*`). Los 16 `*ControllerIT` y `LmsBackendApplicationTests` nunca se ejecutaban con `./mvnw test` ni `./mvnw clean test`. Se agrego configuracion explicita de `maven-surefire-plugin` con `<includes>` para `*Test`, `*Tests` y `*IT`. Baseline real: 308 tests verdes (149 unitarios + 159 integracion). | PENDIENTE_HASH | 2026-09-29 |
 | 70 | Validar que no se cambie el estado del ultimo ADMINISTRADOR activo del sistema (aplica a `PATCH /usuarios/{id}/estado` y `PUT /usuarios/{id}/roles`). Requiere query agregada (`countByRoles_NombreAndEstado`) y decision de producto. | user | FASE 6 | Pendiente |
 | 71 | Maquina de estados explicita para `EstadoUsuario`. Hoy solo se valida no-op. Si en el futuro se agrega `SUSPENDIDO` o reglas por rol, formalizar. | user | FASE 6 | Pendiente |
 | 72 | Usuario "zombi": si se le asignan solo roles sin permisos efectivos, puede autenticarse pero no puede hacer nada. La regla `@NotEmpty` en `AsignarRolesUsuarioRequest` no lo evita. Evaluar minimo obligatorio o bloqueo en login. | user | FASE 6 | Pendiente |
@@ -77,7 +76,7 @@ cuando se resuelva, indicando el commit.
 | 40 | Validar en servicio que no se solapen bloques de disponibilidad del mismo docente y dia. Requiere query de interseccion. | 5d7739f | 2026-09-20 |
 | 41 | Validar en servicio que el usuario autenticado sea el docente dueno o ADMIN al crear/modificar `DisponibilidadTutoria`. | 5d7739f | 2026-09-20 |
 | 42 | Validar en servicio que al crear `Evento`, si `cursoId != null`, el usuario pertenezca al curso (docente o estudiante matriculado). | ca9084f | 2026-09-20 |
-| 43 | Endpoint `PATCH /api/tutorias/{id}/estado`. Maquina de estados: PENDIENTE -> CONFIRMADA | CANCELADA; CONFIRMADA -> COMPLETADA | CANCELADA; COMPLETADA y CANCELADA terminales. Autorizacion por transicion: cualquier participante puede confirmar/cancelar; solo el docente o ADMIN puede marcar COMPLETADA. | HASH_MERGE_43 | 2026-09-29 |
+| 43 | Endpoint `PATCH /api/tutorias/{id}/estado`. Maquina de estados: PENDIENTE -> CONFIRMADA | CANCELADA; CONFIRMADA -> COMPLETADA | CANCELADA; COMPLETADA y CANCELADA terminales. Autorizacion por transicion: cualquier participante puede confirmar/cancelar; solo el docente o ADMIN puede marcar COMPLETADA. | 16595e5 | 2026-09-29 |
 | 44 | Validar en servicio que `fecha` y `duracionMinutos` de `Tutoria` solo sean editables cuando `estado = PENDIENTE`. | a772ec6 | 2026-09-20 |
 | 45 | Validar en servicio que `Tutoria.fecha > now()` al crear. | a772ec6 | 2026-09-20 |
 | 46 | Validar en servicio que el usuario autenticado sea el estudiante, el docente o ADMIN al crear/modificar `Tutoria`. | a772ec6 | 2026-09-20 |

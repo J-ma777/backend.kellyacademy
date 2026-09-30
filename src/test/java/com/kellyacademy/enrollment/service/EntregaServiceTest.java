@@ -6,6 +6,7 @@ import com.kellyacademy.course.entity.Tarea;
 import com.kellyacademy.course.entity.Unidad;
 import com.kellyacademy.course.repository.TareaRepository;
 import com.kellyacademy.enrollment.dto.request.ActualizarEntregaRequest;
+import com.kellyacademy.enrollment.dto.request.CalificarEntregaRequest;
 import com.kellyacademy.enrollment.dto.request.CrearEntregaRequest;
 import com.kellyacademy.enrollment.dto.response.EntregaResponse;
 import com.kellyacademy.enrollment.entity.Entrega;
@@ -26,9 +27,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
@@ -57,6 +60,7 @@ class EntregaServiceTest {
     private Tarea tarea;
     private Usuario estudiante;
     private Usuario docente;
+    private Usuario docenteAjeno;
 
     @BeforeEach
     void setUp() {
@@ -71,6 +75,13 @@ class EntregaServiceTest {
         docente = new Usuario();
         docente.setId(docenteDuenoId);
         docente.setRoles(Set.of(rolDocente));
+
+        // [SLICE #21] Docente ajeno al curso de la tarea. Usado para verificar
+        // que solo el docente dueno (o ADMIN) puede calificar.
+        Usuario docenteAjenoUsuario = new Usuario();
+        docenteAjenoUsuario.setId(UUID.randomUUID());
+        docenteAjenoUsuario.setRoles(Set.of(rolDocente));
+        this.docenteAjeno = docenteAjenoUsuario;
 
         Curso curso = new Curso();
         curso.setId(cursoId);
@@ -234,5 +245,168 @@ class EntregaServiceTest {
         assertThatThrownBy(() -> entregaService.actualizar(UUID.randomUUID(), request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("calificada");
+    }
+
+    // -------- calificar (SLICE #21) --------
+
+    @Test
+    void calificar_cuandoDocenteDueno_retornaEntregaCalificada() {
+        autenticarComo(docente);
+
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setTarea(tarea);
+        entrega.setEstudiante(estudiante);
+        entrega.setEstado(EstadoEntrega.PENDIENTE);
+        entrega.setUrlArchivo("https://example.com/archivo.pdf");
+
+        CalificarEntregaRequest request = new CalificarEntregaRequest(
+                new BigDecimal("85.50"), "Buen trabajo"
+        );
+
+        when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
+                .thenReturn(Optional.of(entrega));
+        when(entregaMapper.toResponse(entrega)).thenReturn(mock(EntregaResponse.class));
+
+        EntregaResponse response = entregaService.calificar(entrega.getId(), request);
+
+        assertThat(response).isNotNull();
+        assertThat(entrega.getNota()).isEqualByComparingTo("85.50");
+        assertThat(entrega.getRetroalimentacion()).isEqualTo("Buen trabajo");
+        assertThat(entrega.getEstado()).isEqualTo(EstadoEntrega.CALIFICADA);
+    }
+
+    @Test
+    void calificar_cuandoDocenteAjeno_lanzaAccessDenied() {
+        autenticarComo(docenteAjeno); // ver helper abajo
+
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setTarea(tarea);
+        entrega.setEstudiante(estudiante);
+        entrega.setEstado(EstadoEntrega.PENDIENTE);
+
+        CalificarEntregaRequest request = new CalificarEntregaRequest(
+                new BigDecimal("80.00"), null
+        );
+
+        when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
+                .thenReturn(Optional.of(entrega));
+
+        assertThatThrownBy(() -> entregaService.calificar(entrega.getId(), request))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void calificar_cuandoEntregaNoExiste_lanzaResourceNotFound() {
+        autenticarComo(docente);
+
+        UUID id = UUID.randomUUID();
+        CalificarEntregaRequest request = new CalificarEntregaRequest(
+                new BigDecimal("80.00"), null
+        );
+
+        when(entregaRepository.findWithTareaAndEstudianteById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> entregaService.calificar(id, request))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void calificar_cuandoNotaExcedePuntajeMaximo_lanzaBusinessException() {
+        autenticarComo(docente);
+
+        // puntajeMaximo por defecto en Tarea es 100
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setTarea(tarea);
+        entrega.setEstudiante(estudiante);
+        entrega.setEstado(EstadoEntrega.PENDIENTE);
+
+        CalificarEntregaRequest request = new CalificarEntregaRequest(
+                new BigDecimal("150.00"), null
+        );
+
+        when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
+                .thenReturn(Optional.of(entrega));
+
+        assertThatThrownBy(() -> entregaService.calificar(entrega.getId(), request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("excede");
+    }
+
+    @Test
+    void calificar_cuandoNotaNegativa_lanzaBusinessException() {
+        autenticarComo(docente);
+
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setTarea(tarea);
+        entrega.setEstudiante(estudiante);
+        entrega.setEstado(EstadoEntrega.PENDIENTE);
+
+        CalificarEntregaRequest request = new CalificarEntregaRequest(
+                new BigDecimal("-1.00"), null
+        );
+
+        when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
+                .thenReturn(Optional.of(entrega));
+
+        assertThatThrownBy(() -> entregaService.calificar(entrega.getId(), request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("negativa");
+    }
+
+    @Test
+    void calificar_cuandoYaCalificada_permiteRecalificar() {
+        autenticarComo(docente);
+
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setTarea(tarea);
+        entrega.setEstudiante(estudiante);
+        entrega.setEstado(EstadoEntrega.CALIFICADA);
+        entrega.setNota(new BigDecimal("70.00"));
+        entrega.setRetroalimentacion("Anterior");
+
+        CalificarEntregaRequest request = new CalificarEntregaRequest(
+                new BigDecimal("90.00"), "Correccion"
+        );
+
+        when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
+                .thenReturn(Optional.of(entrega));
+        when(entregaMapper.toResponse(entrega)).thenReturn(mock(EntregaResponse.class));
+
+        entregaService.calificar(entrega.getId(), request);
+
+        assertThat(entrega.getNota()).isEqualByComparingTo("90.00");
+        assertThat(entrega.getRetroalimentacion()).isEqualTo("Correccion");
+        assertThat(entrega.getEstado()).isEqualTo(EstadoEntrega.CALIFICADA);
+    }
+
+    @Test
+    void crear_cuandoUrlArchivoEsNull_creaEntregaSinUrl() {
+        autenticarComo(docente);
+
+        CrearEntregaRequest request = new CrearEntregaRequest(
+                tareaId, estudianteId, null
+        );
+        Entrega guardada = new Entrega();
+        guardada.setId(UUID.randomUUID());
+
+        when(tareaRepository.findWithSemanaCursoDocenteById(tareaId)).thenReturn(Optional.of(tarea));
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(true);
+        when(entregaRepository.findByTareaIdAndEstudianteId(tareaId, estudianteId)).thenReturn(Optional.empty());
+        when(entregaMapper.toEntity(request)).thenReturn(new Entrega());
+        when(entregaRepository.save(any(Entrega.class))).thenReturn(guardada);
+        when(entregaRepository.findWithTareaAndEstudianteById(guardada.getId()))
+                .thenReturn(Optional.of(guardada));
+        when(entregaMapper.toResponse(guardada)).thenReturn(mock(EntregaResponse.class));
+
+        EntregaResponse response = entregaService.crear(request);
+
+        assertThat(response).isNotNull();
+        verify(entregaRepository).save(any(Entrega.class));
     }
 }

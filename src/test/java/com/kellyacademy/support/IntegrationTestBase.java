@@ -250,6 +250,20 @@ public abstract class IntegrationTestBase {
         );
     }
 
+    /**
+     * PATCH con body JSON. Sobrecarga del patch sin body (usado por endpoints
+     * administrativos como /usuarios/{id}/estado cuando el estado va por otro canal).
+     * Necesario para endpoints PATCH que reciben DTO en el cuerpo, como
+     * PATCH /entregas/{id}/calificar (slice #21).
+     */
+    protected <T> ResponseEntity<T> patch(String url, String token, Object body, Class<T> respType) {
+        return rest.exchange(
+                url, HttpMethod.PATCH,
+                new HttpEntity<>(body, headersConToken(token)),
+                respType
+        );
+    }
+
     protected <T> ResponseEntity<T> get(String url, String token, Class<T> respType) {
         return rest.exchange(
                 url, HttpMethod.GET,

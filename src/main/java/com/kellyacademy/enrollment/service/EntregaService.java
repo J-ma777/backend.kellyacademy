@@ -4,6 +4,7 @@ import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.entity.Tarea;
 import com.kellyacademy.course.repository.TareaRepository;
 import com.kellyacademy.enrollment.dto.request.ActualizarEntregaRequest;
+import com.kellyacademy.enrollment.dto.request.CalificarEntregaRequest;
 import com.kellyacademy.enrollment.dto.request.CrearEntregaRequest;
 import com.kellyacademy.enrollment.dto.response.EntregaResponse;
 import com.kellyacademy.enrollment.dto.response.EntregaResumenResponse;
@@ -28,6 +29,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -98,6 +100,8 @@ public class EntregaService {
 
     // El DOCENTE (dueno del curso de la tarea) o ADMIN crean la entrega.
     // El estudiante NO crea: solo modifica la suya mientras no este CALIFICADA.
+    // urlArchivo es opcional: cubre el caso de trabajo en equipo donde un solo
+    // integrante sube el archivo y el docente crea la entrega del resto sin URL.
     public EntregaResponse crear(CrearEntregaRequest request) {
 
         Tarea tarea = tareaRepository.findWithSemanaCursoDocenteById(request.tareaId())
@@ -110,7 +114,7 @@ public class EntregaService {
         validarEstudianteTieneRolEstudiante(estudiante);
         validarEstudianteMatriculado(tarea, estudiante);
         validarNoDuplicada(tarea.getId(), estudiante.getId());
-        validarUrl(request.urlArchivo());
+        validarUrlOpcional(request.urlArchivo()); // antes: validarUrl
 
         Entrega entrega = entregaMapper.toEntity(request);
         entrega.setTarea(tarea);
@@ -138,6 +142,25 @@ public class EntregaService {
         entregaMapper.actualizarDesdeRequest(request, entrega);
         entrega.setEnviadoAt(LocalDateTime.now(AppTime.ZONA_NEGOCIO));
         entrega.setEstado(calcularEstado(entrega.getTarea(), entrega.getEnviadoAt()));
+
+        return entregaMapper.toResponse(entrega);
+    }
+
+    // El DOCENTE dueno del curso de la tarea, o ADMIN, califica.
+    // Re-calificacion permitida: sobrescribe nota y retroalimentacion.
+    // enviadoAt NO se toca (es la marca de envio, no de calificacion).
+    // estado queda CALIFICADA (terminal).
+    public EntregaResponse calificar(UUID id, CalificarEntregaRequest request) {
+
+        Entrega entrega = entregaRepository.findWithTareaAndEstudianteById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+
+        validarPuedeCalificar(entrega);
+        validarNotaEnRango(request.nota(), entrega.getTarea());
+
+        entrega.setNota(request.nota());
+        entrega.setRetroalimentacion(request.retroalimentacion());
+        entrega.setEstado(EstadoEntrega.CALIFICADA);
 
         return entregaMapper.toResponse(entrega);
     }
@@ -191,6 +214,36 @@ public class EntregaService {
         }
     }
 
+    // DOCENTE dueno del curso de la tarea, o ADMIN.
+    private void validarPuedeCalificar(Entrega entrega) {
+        if (SecurityUtils.esAdmin()) {
+            return;
+        }
+        UUID docenteId = entrega.getTarea().getSemana().getUnidad()
+                .getCurso().getDocente().getId();
+        if (!docenteId.equals(SecurityUtils.getUsuarioAutenticadoId())) {
+            throw new AccessDeniedException("No tienes permisos para calificar esta entrega");
+        }
+    }
+
+    // Rango: 0 <= nota <= tarea.puntajeMaximo.
+    // Se compara con compareTo (BigDecimal.equals es scale-sensitive).
+    private void validarNotaEnRango(BigDecimal nota, Tarea tarea) {
+        if (nota == null) {
+            throw new BusinessException("NOTA_INVALIDA", "La nota es obligatoria");
+        }
+        if (nota.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("NOTA_INVALIDA", "La nota no puede ser negativa");
+        }
+        BigDecimal puntajeMaximo = BigDecimal.valueOf(tarea.getPuntajeMaximo());
+        if (nota.compareTo(puntajeMaximo) > 0) {
+            throw new BusinessException(
+                    "NOTA_EXCEDE_PUNTAJE_MAXIMO",
+                    "La nota " + nota + " excede el puntaje maximo de la tarea (" + puntajeMaximo + ")"
+            );
+        }
+    }
+
     private void validarNoCalificada(Entrega entrega) {
         if (entrega.getEstado() == EstadoEntrega.CALIFICADA) {
             throw new BusinessException(
@@ -234,6 +287,8 @@ public class EntregaService {
         }
     }
 
+    // Validacion de URL obligatoria (usada por actualizar, donde el
+    // estudiante siempre sube archivo).
     private void validarUrl(String url) {
         if (!UrlValidator.esFormatoValido(url)) {
             throw new BusinessException(
@@ -241,6 +296,16 @@ public class EntregaService {
                     "La URL del archivo no tiene un formato valido: " + url
             );
         }
+    }
+
+    // Validacion de URL opcional (usada por crear). null es valido:
+    // cubre el caso de trabajo en equipo donde el docente crea la entrega de
+    // integrantes que no suben archivo propio.
+    private void validarUrlOpcional(String url) {
+        if (url == null) {
+            return;
+        }
+        validarUrl(url);
     }
 
     // PENDIENTE si no hay deadline o si se entrego a tiempo. TARDE si paso la fecha limite.

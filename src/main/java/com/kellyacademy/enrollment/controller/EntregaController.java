@@ -1,6 +1,7 @@
 package com.kellyacademy.enrollment.controller;
 
 import com.kellyacademy.enrollment.dto.request.ActualizarEntregaRequest;
+import com.kellyacademy.enrollment.dto.request.CalificarEntregaRequest;
 import com.kellyacademy.enrollment.dto.request.CrearEntregaRequest;
 import com.kellyacademy.enrollment.dto.response.EntregaResponse;
 import com.kellyacademy.enrollment.dto.response.EntregaResumenResponse;
@@ -62,6 +63,15 @@ public class EntregaController {
             @Valid @RequestBody ActualizarEntregaRequest request
     ) {
         return ResponseEntity.ok(entregaService.actualizar(id, request));
+    }
+
+    @PatchMapping("/{id}/calificar")
+    @PreAuthorize("hasRole('ADMINISTRADOR') or hasRole('DOCENTE')")
+    public ResponseEntity<EntregaResponse> calificar(
+            @PathVariable UUID id,
+            @Valid @RequestBody CalificarEntregaRequest request
+    ) {
+        return ResponseEntity.ok(entregaService.calificar(id, request));
     }
 
     @DeleteMapping("/{id}")

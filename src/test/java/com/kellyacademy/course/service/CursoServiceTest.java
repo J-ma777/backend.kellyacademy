@@ -279,4 +279,132 @@ class CursoServiceTest {
 
         verify(cursoRepository).delete(curso);
     }
+
+    // ------------------------------------------------------------------
+    // cambiarEstado
+    // ------------------------------------------------------------------
+
+    @Test
+    void cambiarEstado_cursoInexistente_lanzaResourceNotFoundException() {
+
+        UUID cursoId = UUID.randomUUID();
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> cursoService.cambiarEstado(cursoId, EstadoCurso.ACTIVO))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(cursoId.toString());
+    }
+
+    @Test
+    void cambiarEstado_mismoEstado_lanzaBusinessException() {
+
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = new Curso();
+        curso.setId(cursoId);
+        curso.setEstado(EstadoCurso.BORRADOR);
+
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+
+        assertThatThrownBy(() -> cursoService.cambiarEstado(cursoId, EstadoCurso.BORRADOR))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ESTADO_SIN_CAMBIOS");
+                    assertThat(ex.getMessage()).contains("BORRADOR");
+                });
+    }
+
+    @Test
+    void cambiarEstado_borradorAActivo_exitoso() {
+
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = new Curso();
+        curso.setId(cursoId);
+        curso.setEstado(EstadoCurso.BORRADOR);
+
+        CursoResponse responseEsperado = responseConEstado(cursoId, EstadoCurso.ACTIVO);
+
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(cursoMapper.toResponse(curso)).thenReturn(responseEsperado);
+
+        CursoResponse resultado = cursoService.cambiarEstado(cursoId, EstadoCurso.ACTIVO);
+
+        assertThat(resultado.estado()).isEqualTo(EstadoCurso.ACTIVO);
+        assertThat(curso.getEstado()).isEqualTo(EstadoCurso.ACTIVO);
+    }
+
+    @Test
+    void cambiarEstado_activoAFinalizado_exitoso() {
+
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = new Curso();
+        curso.setId(cursoId);
+        curso.setEstado(EstadoCurso.ACTIVO);
+
+        CursoResponse responseEsperado = responseConEstado(cursoId, EstadoCurso.FINALIZADO);
+
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(cursoMapper.toResponse(curso)).thenReturn(responseEsperado);
+
+        CursoResponse resultado = cursoService.cambiarEstado(cursoId, EstadoCurso.FINALIZADO);
+
+        assertThat(resultado.estado()).isEqualTo(EstadoCurso.FINALIZADO);
+    }
+
+    @Test
+    void cambiarEstado_archivadoAActivo_lanzaBusinessException() {
+
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = new Curso();
+        curso.setId(cursoId);
+        curso.setEstado(EstadoCurso.ARCHIVADO);
+
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+
+        assertThatThrownBy(() -> cursoService.cambiarEstado(cursoId, EstadoCurso.ACTIVO))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("TRANSICION_ESTADO_INVALIDA");
+                    assertThat(ex.getMessage()).contains("ARCHIVADO").contains("ACTIVO");
+                });
+    }
+
+    @Test
+    void cambiarEstado_activoABorrador_lanzaBusinessException() {
+
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = new Curso();
+        curso.setId(cursoId);
+        curso.setEstado(EstadoCurso.ACTIVO);
+
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+
+        assertThatThrownBy(() -> cursoService.cambiarEstado(cursoId, EstadoCurso.BORRADOR))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("TRANSICION_ESTADO_INVALIDA");
+                });
+    }
+
+    @Test
+    void cambiarEstado_borradorAFinalizado_lanzaBusinessException() {
+
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = new Curso();
+        curso.setId(cursoId);
+        curso.setEstado(EstadoCurso.BORRADOR);
+
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+
+        assertThatThrownBy(() -> cursoService.cambiarEstado(cursoId, EstadoCurso.FINALIZADO))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("TRANSICION_ESTADO_INVALIDA");
+                });
+    }
+
+    // Helper local para construir CursoResponse con solo lo que estos tests necesitan.
+    // No usa mocks del mapper: solo necesita un objeto con el estado correcto.
+    private CursoResponse responseConEstado(UUID cursoId, EstadoCurso estado) {
+        return new CursoResponse(
+                cursoId, null, "Curso", "Desc",
+                NivelCefr.B1, null, null, null, 30,
+                estado, null, null
+        );
+    }
 }

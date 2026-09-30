@@ -7,24 +7,19 @@ cuando se resuelva, indicando el commit.
 
 | #  | Deuda | Feature  | Resolver en | Estado |
 |----|---|----------|-------------|---|
-| 3  | Endpoint administrativo para cambiar `estado` de usuario | user     | FASE 5      | Pendiente |
 | 4  | Endpoint de cambio de contrasena con validacion de contrasena actual | user     | FASE 5      | Pendiente |
 | 5  | Endpoint de cambio de correo con verificacion por email | user     | FASE 7      | Pendiente |
-| 6  | Endpoint administrativo para asignar/quitar roles | user     | FASE 5      | Pendiente |
 | 7  | Warning de API deprecada en `JwtAuthenticationFilter` | security | FASE 6      | Pendiente |
 | 8  | Warning de Spring Security sobre `AuthenticationProvider` manual | security | FASE 6      | Pendiente |
 | 9  | Warning de Mockito self-attaching | testing  | FASE 6      | Pendiente |
 | 12 | Endpoint administrativo para cambiar docente de un curso | course | FASE 5 | Pendiente |
-| 13 | Endpoint administrativo para cambiar estado de curso (con maquina de estados) | course | FASE 5 | Pendiente |
 | 16 | Reordenar `numero` de unidades o semanas — requiere endpoint de operacion masiva (no `PUT` individual) por restriccion `UNIQUE(curso_id, numero)` y `UNIQUE(unidad_id, numero)` | course | FASE 5 | Pendiente |
 | 19 | Cambiar `semanaId` de `Clase`, `Material` o `Tarea` (mover entre semanas) — requiere endpoint dedicado | course | FASE 5 | Pendiente |
 | 20 | Tests con H2 + `create-drop` no validan que las migraciones Flyway coincidan con las entidades. Cobertura real requiere Testcontainers con Postgres. | testing | FASE 6 | Pendiente |
 | 21 | Endpoint `PATCH /entregas/{id}/calificar` — setea `nota`, `retroalimentacion` y pasa `estado` a `CALIFICADA` con validacion de puntaje maximo de la `Tarea` | enrollment | FASE 5 | Pendiente |
-| 22 | Endpoint administrativo para cambiar `estado` de `Matricula` (maquina de estados: ACTIVA -> COMPLETADA / RIESGO / ABANDONADA) | enrollment | FASE 5 | Pendiente |
 | 23 | Calculo automatico de `notaFinal` y `asistenciaPorcentaje` de `Matricula` a partir de entregas y asistencias | enrollment | FASE 6 | Pendiente |
 | 28 | `Conversacion` unique constraint no normaliza orden de participantes — (A,B) y (B,A) son filas distintas. Mitigacion actual: servicio normaliza orden por UUID antes de crear. Solucion robusta: indice funcional Postgres con LEAST/GREATEST (requiere Testcontainers). | communication | FASE 6 | Pendiente |
 | 34 | Endpoint dedicado `PATCH /conversaciones/{id}/asunto` si se necesita editar asunto post-creacion. | communication | FASE 5 | Pendiente |
-| 43 | Endpoint `PATCH /tutorias/{id}/estado` con validacion de transiciones (PENDIENTE -> CONFIRMADA / CANCELADA; CONFIRMADA -> COMPLETADA / CANCELADA; COMPLETADA y CANCELADA terminales). | calendar | FASE 5 | Pendiente |
 | 47 | Validar en servicio que el docente tenga disponibilidad (`DisponibilidadTutoria`) en el bloque solicitado al crear `Tutoria`. Requiere cruzar `DayOfWeek` + rango horario. | calendar | FASE 6 | Pendiente |
 | 48 | Validar en servicio que no exista solapamiento con otras tutorias CONFIRMADAS del mismo docente o estudiante. | calendar | FASE 6 | Pendiente |
 | 50 | Endpoint `POST /recursos/{id}/descargar` que incremente `contadorDescargas` y retorne la URL. Requiere `@Modifying` query o `@Transactional` con incremento atomico. | library | FASE 5 | Pendiente |
@@ -38,12 +33,16 @@ cuando se resuelva, indicando el commit.
 | 61 | `Clase.fechaHora` nullable impide aplicar la validacion `CLASE_NO_IMPARTIDA` (#27) a clases sin fecha. Requiere decidir si `fechaHora` pasa a obligatoria o si se modela "clase impartida" con un flag explicito. | attendance | FASE 5 | Pendiente |
 | 62 | `Asistencia.estado` no dispara `Notificacion` al estudiante cuando se registra AUSENTE / TARDE / JUSTIFICADO. Depende de #36. | attendance | FASE 5 | Pendiente |
 | 63 | No hay endpoint de registro masivo de asistencia por clase (`POST /api/asistencias/masivo` con lista de estudiantes). Hoy se registra uno por uno. | attendance | FASE 5 | Pendiente |
-| 64 | `IntegrationTestBase.limpiarTablas()` escala manualmente: cada entidad nueva requiere agregar su `deleteAll` en orden inverso a las FKs. Refactor a `TRUNCATE ... CASCADE` o limpieza dinamica basada en metadatos de Hibernate. | testing | FASE 5 | Pendiente |
 | 65 | Inconsistencia entre `Specifications`: `CursoSpecifications` y `NotificacionSpecifications` usan `Specification.unrestricted()` para match-all; `MatriculaSpecifications`, `EntregaSpecifications` y `AnuncioSpecifications` devuelven `null` en el predicado. Unificar convencion. | shared | FASE 5 | Pendiente |
 | 66 | `AnuncioService.crear` notifica a estudiantes matriculados uno por uno dentro de un mismo `@Transactional`. Con cursos grandes (>100 estudiantes) esto genera N inserts secuenciales. Considerar batch insert o job asincrono. | communication | FASE 6 | Pendiente |
 | 67 | `ConversacionRepository.findByCursoIsNullAndParticipante1IdAndParticipante2Id` no está cubierto por índice único funcional (solo el caso con curso). Dos hilos concurrentes podrían crear conversaciones duplicadas sin curso. Mitigación actual: el servicio normaliza orden. Solución robusta: índice funcional Postgres con LEAST/GREATEST + `curso_id NULLS NOT DISTINCT`. Requiere Testcontainers. | communication | FASE 6 | Pendiente |
 | 68 | `MensajeController.listar` pagina mensajes con sort `enviadoAt` ascendente. Conversaciones largas obligan al cliente a paginar hacia adelante. Considerar endpoint alternativo de "últimos N mensajes" para carga inicial del chat. | communication | FASE 5 | Pendiente |
-
+| 69 | Surefire no inclui­a las clases `*IT` en su patron por defecto (`*Test`, `*Tests`, `Test*`). Los 16 `*ControllerIT` y `LmsBackendApplicationTests` nunca se ejecutaban con `./mvnw test` ni `./mvnw clean test`. Se agrego configuracion explicita de `maven-surefire-plugin` con `<includes>` para `*Test`, `*Tests` y `*IT`. Baseline real: 308 tests verdes (149 unitarios + 159 integracion). | PENDIENTE_HASH | 2026-09-29 |
+| 70 | Validar que no se cambie el estado del ultimo ADMINISTRADOR activo del sistema (aplica a `PATCH /usuarios/{id}/estado` y `PUT /usuarios/{id}/roles`). Requiere query agregada (`countByRoles_NombreAndEstado`) y decision de producto. | user | FASE 6 | Pendiente |
+| 71 | Maquina de estados explicita para `EstadoUsuario`. Hoy solo se valida no-op. Si en el futuro se agrega `SUSPENDIDO` o reglas por rol, formalizar. | user | FASE 6 | Pendiente |
+| 72 | Usuario "zombi": si se le asignan solo roles sin permisos efectivos, puede autenticarse pero no puede hacer nada. La regla `@NotEmpty` en `AsignarRolesUsuarioRequest` no lo evita. Evaluar minimo obligatorio o bloqueo en login. | user | FASE 6 | Pendiente |
+| 73 | `BORRADOR -> ACTIVO` en curso no valida contenido minimo (unidades, semanas). Requiere decision de producto sobre "curso publicable". | course | FASE 6 | Pendiente |
+| 75 | `CursoService.eliminar` permite eliminar un curso en cualquier estado, incluyendo ACTIVO con estudiantes matriculados. Deberia validar estado (no eliminar ACTIVO/FINALIZADO). | course | FASE 5/6 | Pendiente |
 
 ## Resueltos
 
@@ -51,12 +50,16 @@ cuando se resuelva, indicando el commit.
 |----|---|--|---|
 | 1  | `Usuario.roles` con `FetchType.EAGER` — riesgo N+1 en listados paginados | refactor/user-lazy-fetching | 2026-09-18 |
 | 2  | `Rol.permisos` con `FetchType.EAGER` — agrava el punto 1 | refactor/user-lazy-fetching | 2026-09-18 |
+| 3  | Endpoint administrativo `PATCH /api/usuarios/{id}/estado` (ACTIVO / INACTIVO / BLOQUEADO). Solo ADMINISTRADOR. Valida que un admin no pueda cambiarse su propio estado y que el nuevo estado sea distinto al actual. | d3183b9 | 2026-09-29 |
+| 6  | Endpoint administrativo `PUT /api/usuarios/{id}/roles` con semantica de reemplazo total. Solo ADMINISTRADOR. Valida que un admin no pueda modificarse sus propios roles, que todos los roles existan y que el set no este vacio. | 3a743a7 | 2026-09-29 |
 | 10 | RolResponse anida permisos — revisar cuando Rol.permisos pase a LAZY | a5887b1 | 2026-09-19 |
 | 11 | `CursoResponse` embebe `UsuarioResumenResponse` — dispara EAGER de `Usuario.roles` y `Rol.permisos` | e459b96 | 2026-09-19 |
+| 13 | Endpoint administrativo `PATCH /api/cursos/{id}/estado`. Maquina de estados: BORRADOR -> ACTIVO | ARCHIVADO; ACTIVO -> FINALIZADO | ARCHIVADO; FINALIZADO -> ARCHIVADO; ARCHIVADO terminal. | b867bb5 | 2026-09-29 |
 | 14 | Validar que `docenteId` tenga rol DOCENTE antes de asignarlo a un curso | e459b96 | 2026-09-19 |
 | 15 | `esActual` de `Semana` no se puede cambiar via `PUT` — requiere endpoint `PATCH /semanas/{id}/marcar-actual` | 69e4b1b | 2026-09-20 |
 | 17 | `Material` permite crear sin `urlArchivo` ni `urlExterno` — validar "al menos una URL" en servicio | PR #6 | 2026-09-20 |
 | 18 | `Clase.urlVivo` y `urlGrabacion` — no hay validacion de formato de URL (solo longitud) | PR #6 | 2026-09-20 |
+| 22 | Endpoint administrativo `PATCH /api/matriculas/{id}/estado`. Maquina de estados: ACTIVA -> COMPLETADA | RIESGO | ABANDONADA; RIESGO -> ACTIVA | COMPLETADA | ABANDONADA; COMPLETADA y ABANDONADA terminales. | 028818a | 2026-09-29 |
 | 24 | Validar en servicio que no se pueda re-subir archivo de `Entrega` si `estado = CALIFICADA` | PR #13 | 2026-09-20 |
 | 25 | `Entrega.estado` (PENDIENTE / TARDE) se calcula comparando `enviadoAt` con `Tarea.fechaLimite` en el servicio de creacion | PR #13 | 2026-09-20 |
 | 26 | Validar en servicio que `estudianteId` este matriculado en el curso de la `Clase` antes de registrar `Asistencia` | 1e443a8 | 2026-09-20 |
@@ -74,6 +77,7 @@ cuando se resuelva, indicando el commit.
 | 40 | Validar en servicio que no se solapen bloques de disponibilidad del mismo docente y dia. Requiere query de interseccion. | 5d7739f | 2026-09-20 |
 | 41 | Validar en servicio que el usuario autenticado sea el docente dueno o ADMIN al crear/modificar `DisponibilidadTutoria`. | 5d7739f | 2026-09-20 |
 | 42 | Validar en servicio que al crear `Evento`, si `cursoId != null`, el usuario pertenezca al curso (docente o estudiante matriculado). | ca9084f | 2026-09-20 |
+| 43 | Endpoint `PATCH /api/tutorias/{id}/estado`. Maquina de estados: PENDIENTE -> CONFIRMADA | CANCELADA; CONFIRMADA -> COMPLETADA | CANCELADA; COMPLETADA y CANCELADA terminales. Autorizacion por transicion: cualquier participante puede confirmar/cancelar; solo el docente o ADMIN puede marcar COMPLETADA. | HASH_MERGE_43 | 2026-09-29 |
 | 44 | Validar en servicio que `fecha` y `duracionMinutos` de `Tutoria` solo sean editables cuando `estado = PENDIENTE`. | a772ec6 | 2026-09-20 |
 | 45 | Validar en servicio que `Tutoria.fecha > now()` al crear. | a772ec6 | 2026-09-20 |
 | 46 | Validar en servicio que el usuario autenticado sea el estudiante, el docente o ADMIN al crear/modificar `Tutoria`. | a772ec6 | 2026-09-20 |
@@ -81,8 +85,10 @@ cuando se resuelva, indicando el commit.
 | 51 | Validar en servicio que `urlExterno` tenga formato de URL valido (no solo longitud). | 8ca397b | 2026-09-20 |
 | 52 | Auditar `RolResponse` ahora que `Rol.permisos` es LAZY | a5887b1 | 2026-09-19 |
 | 53 | Auditar mappers que accedan a `Usuario.roles` o `Rol.permisos` | a5887b1 | 2026-09-19 |
+| 64 | `IntegrationTestBase.limpiarTablas()` escalaba manualmente: cada entidad nueva requeria agregar su `deleteAll` en orden inverso a las FKs. Se reemplazo por descubrimiento de tablas via metamodelo de Hibernate (`EntityManagerFactory.getMetamodel()`) y `TRUNCATE TABLE <tabla>` con `SET REFERENTIAL_INTEGRITY FALSE/TRUE` alrededor (H2 no soporta `TRUNCATE ... CASCADE`). | 3ab9edc | 2026-09-29 |
 | 67 | `AnuncioService` no notifica al editar un anuncio (solo al crear). Decision de producto: ¿editar y re-notificar? | 66f364c | 2026-09-20 |
-
+| 69 | Surefire no inclui­a las clases `*IT` en su patron por defecto (`*Test`, `*Tests`, `Test*`). Los 16 `*ControllerIT` y `LmsBackendApplicationTests` nunca se ejecutaban con `./mvnw test` ni `./mvnw clean test`. Se agrego configuracion explicita de `maven-surefire-plugin` con `<includes>` para `*Test`, `*Tests` y `*IT`. Baseline real: 308 tests verdes (149 unitarios + 159 integracion). | 3ab9edc | 2026-09-29 |
+| 74 | `IntegrationTestBase.activarCurso`/`desactivarCurso` mutaban por repositorio. Refactor a usar el endpoint real `PATCH /api/cursos/{id}/estado`. `desactivarCurso` pasa a ARCHIVADO (antes BORRADOR), porque `ACTIVO -> BORRADOR` ya no es valido con la maquina de estados de #13. | 028818a | 2026-09-29 |
 
 ### Decisiones por diseno (no son deuda)
 

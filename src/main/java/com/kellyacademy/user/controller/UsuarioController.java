@@ -1,6 +1,7 @@
 package com.kellyacademy.user.controller;
 
 import com.kellyacademy.user.dto.request.ActualizarUsuarioRequest;
+import com.kellyacademy.user.dto.request.AsignarRolesUsuarioRequest;
 import com.kellyacademy.user.dto.request.CambiarEstadoUsuarioRequest;
 import com.kellyacademy.user.dto.request.CrearUsuarioRequest;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
@@ -64,6 +65,15 @@ public class UsuarioController {
             @Valid @RequestBody CambiarEstadoUsuarioRequest request
     ) {
         return ResponseEntity.ok(usuarioService.cambiarEstado(id, request.estado()));
+    }
+
+    @PutMapping("/{id}/roles")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<UsuarioResponse> asignarRoles(
+            @PathVariable UUID id,
+            @Valid @RequestBody AsignarRolesUsuarioRequest request
+    ) {
+        return ResponseEntity.ok(usuarioService.asignarRoles(id, request.roles()));
     }
 
     @DeleteMapping("/{id}")

@@ -280,6 +280,56 @@ class CursoServiceTest {
         verify(cursoRepository).delete(curso);
     }
 
+    @Test
+    void eliminar_cuandoActivo_lanzaBusinessException() {
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = cursoConEstado(cursoId, EstadoCurso.ACTIVO);
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+
+        assertThatThrownBy(() -> cursoService.eliminar(cursoId))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("CURSO_NO_ELIMINABLE");
+                    assertThat(ex.getMessage()).contains("ACTIVO").contains("Archívalo");
+                });
+
+        verify(cursoRepository, never()).delete(any(Curso.class));
+    }
+
+    @Test
+    void eliminar_cuandoFinalizado_lanzaBusinessException() {
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = cursoConEstado(cursoId, EstadoCurso.FINALIZADO);
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+
+        assertThatThrownBy(() -> cursoService.eliminar(cursoId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("ACTIVO o FINALIZADO");
+
+        verify(cursoRepository, never()).delete(any(Curso.class));
+    }
+
+    @Test
+    void eliminar_cuandoBorrador_ok() {
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = cursoConEstado(cursoId, EstadoCurso.BORRADOR);
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+
+        cursoService.eliminar(cursoId);
+
+        verify(cursoRepository).delete(curso);
+    }
+
+    @Test
+    void eliminar_cuandoArchivado_ok() {
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = cursoConEstado(cursoId, EstadoCurso.ARCHIVADO);
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+
+        cursoService.eliminar(cursoId);
+
+        verify(cursoRepository).delete(curso);
+    }
+
     // ------------------------------------------------------------------
     // cambiarEstado
     // ------------------------------------------------------------------
@@ -406,5 +456,13 @@ class CursoServiceTest {
                 NivelCefr.B1, null, null, null, 30,
                 estado, null, null
         );
+    }
+
+    private Curso cursoConEstado(UUID cursoId, EstadoCurso estado) {
+        Curso curso = new Curso();
+        curso.setId(cursoId);
+        curso.setDocente(docenteConRol());
+        curso.setEstado(estado);
+        return curso;
     }
 }

@@ -193,6 +193,30 @@ class EntregaControllerIT extends IntegrationTestBase {
     }
 
     @Test
+    void eliminar_cuandoCalificada_400() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, req, EntregaResponse.class).getBody()).id();
+
+        patch(
+                "/api/entregas/" + entregaId + "/calificar",
+                docenteDuenoToken,
+                new CalificarEntregaRequest(new BigDecimal("85.50"), "Buen trabajo"),
+                EntregaResponse.class
+        );
+
+        ResponseEntity<ErrorResponse> resp = deleteWithBody(
+                "/api/entregas/" + entregaId, adminToken, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo())
+                .isEqualTo("ENTREGA_CALIFICADA_NO_ELIMINABLE");
+    }
+
+    @Test
     void calificar_comoDocenteDueno_devuelve200() {
         CrearEntregaRequest req = new CrearEntregaRequest(
                 tareaId, estudianteId, "https://example.com/archivo.pdf"

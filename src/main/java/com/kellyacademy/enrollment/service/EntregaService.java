@@ -170,6 +170,13 @@ public class EntregaService {
         Entrega entrega = entregaRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
+        if (entrega.getEstado() == EstadoEntrega.CALIFICADA) {
+            throw new BusinessException(
+                    "ENTREGA_CALIFICADA_NO_ELIMINABLE",
+                    "No se puede eliminar una entrega calificada"
+            );
+        }
+
         entregaRepository.delete(entrega);
     }
 

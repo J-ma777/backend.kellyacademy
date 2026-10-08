@@ -173,4 +173,26 @@ class CursoControllerIT extends IntegrationTestBase {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
+
+    @Test
+    void eliminar_cuandoActivo_400() {
+        UUID cursoId = crearCursoEnBorrador();
+        patchEstado(cursoId, EstadoCurso.ACTIVO, adminToken);
+
+        ResponseEntity<ErrorResponse> resp = deleteWithBody(
+                "/api/cursos/" + cursoId, adminToken, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("CURSO_NO_ELIMINABLE");
+    }
+
+    @Test
+    void eliminar_cuandoBorrador_204() {
+        UUID cursoId = crearCursoEnBorrador();
+
+        ResponseEntity<Void> resp = delete("/api/cursos/" + cursoId, adminToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
 }

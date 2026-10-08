@@ -1,6 +1,8 @@
 package com.kellyacademy.course.service;
 
 import com.kellyacademy.course.dto.request.CrearUnidadRequest;
+import com.kellyacademy.course.dto.request.ReordenarRequest;
+import com.kellyacademy.course.dto.response.UnidadResumenResponse;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.entity.Unidad;
 import com.kellyacademy.course.mapper.UnidadMapper;
@@ -25,12 +27,15 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -174,4 +179,134 @@ class UnidadServiceTest {
 
         verify(unidadRepository, never()).delete(any());
     }
+
+        @Test
+        void reordenar_ok_devuelveNuevoOrden() {
+        Curso curso = cursoDeDocente();
+        Unidad u1 = unidad(curso, 1);
+        Unidad u2 = unidad(curso, 2);
+        List<Unidad> actuales = List.of(u1, u2);
+        List<Unidad> finales = List.of(u2, u1);
+
+        when(cursoRepository.findWithDocenteById(curso.getId())).thenReturn(Optional.of(curso));
+        when(unidadRepository.findByCursoIdOrderByNumeroAsc(curso.getId()))
+            .thenReturn(actuales, finales);
+        when(unidadMapper.toResumenResponse(u2)).thenReturn(new UnidadResumenResponse(u2.getId(), 1, "U2"));
+        when(unidadMapper.toResumenResponse(u1)).thenReturn(new UnidadResumenResponse(u1.getId(), 2, "U1"));
+
+        List<UnidadResumenResponse> resultado = unidadService.reordenar(curso.getId(),
+            new ReordenarRequest(List.of(
+                new ReordenarRequest.ItemOrden(u2.getId(), 1),
+                new ReordenarRequest.ItemOrden(u1.getId(), 2)
+            )));
+
+        assertThat(resultado).extracting(UnidadResumenResponse::id).containsExactly(u2.getId(), u1.getId());
+        verify(unidadRepository, times(2)).saveAll(actuales);
+        verify(unidadRepository, times(2)).flush();
+        }
+
+        @Test
+        void reordenar_cuandoOrdenVacio_lanzaBusinessException() {
+        Curso curso = cursoDeDocente();
+        when(cursoRepository.findWithDocenteById(curso.getId())).thenReturn(Optional.of(curso));
+
+        assertThatThrownBy(() -> unidadService.reordenar(curso.getId(), new ReordenarRequest(List.of())))
+            .isInstanceOfSatisfying(BusinessException.class, ex ->
+                org.assertj.core.api.Assertions.assertThat(ex.getCodigo()).isEqualTo("ORDEN_VACIO"));
+        }
+
+        @Test
+        void reordenar_cuandoFaltanIds_lanzaBusinessException() {
+        Curso curso = cursoDeDocente();
+        Unidad u1 = unidad(curso, 1);
+        Unidad u2 = unidad(curso, 2);
+        when(cursoRepository.findWithDocenteById(curso.getId())).thenReturn(Optional.of(curso));
+        when(unidadRepository.findByCursoIdOrderByNumeroAsc(curso.getId())).thenReturn(List.of(u1, u2));
+
+        assertThatThrownBy(() -> unidadService.reordenar(curso.getId(), new ReordenarRequest(List.of(
+            new ReordenarRequest.ItemOrden(u1.getId(), 1)
+        )))).isInstanceOfSatisfying(BusinessException.class, ex ->
+            org.assertj.core.api.Assertions.assertThat(ex.getCodigo()).isEqualTo("ORDEN_INCOMPLETO"));
+        }
+
+        @Test
+        void reordenar_cuandoHayIdsAjenos_lanzaBusinessException() {
+        Curso curso = cursoDeDocente();
+        Unidad u1 = unidad(curso, 1);
+        Unidad u2 = unidad(curso, 2);
+        when(cursoRepository.findWithDocenteById(curso.getId())).thenReturn(Optional.of(curso));
+        when(unidadRepository.findByCursoIdOrderByNumeroAsc(curso.getId())).thenReturn(List.of(u1, u2));
+
+        assertThatThrownBy(() -> unidadService.reordenar(curso.getId(), new ReordenarRequest(List.of(
+            new ReordenarRequest.ItemOrden(u1.getId(), 1),
+            new ReordenarRequest.ItemOrden(u2.getId(), 2),
+            new ReordenarRequest.ItemOrden(UUID.randomUUID(), 3)
+        )))).isInstanceOfSatisfying(BusinessException.class, ex ->
+            org.assertj.core.api.Assertions.assertThat(ex.getCodigo()).isEqualTo("ORDEN_CON_IDS_AJENOS"));
+        }
+
+        @Test
+        void reordenar_cuandoNumerosDuplicados_lanzaBusinessException() {
+        Curso curso = cursoDeDocente();
+        Unidad u1 = unidad(curso, 1);
+        Unidad u2 = unidad(curso, 2);
+        when(cursoRepository.findWithDocenteById(curso.getId())).thenReturn(Optional.of(curso));
+        when(unidadRepository.findByCursoIdOrderByNumeroAsc(curso.getId())).thenReturn(List.of(u1, u2));
+
+        assertThatThrownBy(() -> unidadService.reordenar(curso.getId(), new ReordenarRequest(List.of(
+            new ReordenarRequest.ItemOrden(u1.getId(), 1),
+            new ReordenarRequest.ItemOrden(u2.getId(), 1)
+        )))).isInstanceOfSatisfying(BusinessException.class, ex ->
+            org.assertj.core.api.Assertions.assertThat(ex.getCodigo()).isEqualTo("ORDEN_CON_NUMEROS_DUPLICADOS"));
+        }
+
+        @Test
+        void reordenar_cuandoNumerosNoContiguos_lanzaBusinessException() {
+        Curso curso = cursoDeDocente();
+        Unidad u1 = unidad(curso, 1);
+        Unidad u2 = unidad(curso, 2);
+        when(cursoRepository.findWithDocenteById(curso.getId())).thenReturn(Optional.of(curso));
+        when(unidadRepository.findByCursoIdOrderByNumeroAsc(curso.getId())).thenReturn(List.of(u1, u2));
+
+        assertThatThrownBy(() -> unidadService.reordenar(curso.getId(), new ReordenarRequest(List.of(
+            new ReordenarRequest.ItemOrden(u1.getId(), 1),
+            new ReordenarRequest.ItemOrden(u2.getId(), 3)
+        )))).isInstanceOfSatisfying(BusinessException.class, ex ->
+            org.assertj.core.api.Assertions.assertThat(ex.getCodigo()).isEqualTo("ORDEN_CON_NUMEROS_NO_CONTIGUOS"));
+        }
+
+        @Test
+        void reordenar_cuandoMismoOrden_lanzaBusinessException() {
+        Curso curso = cursoDeDocente();
+        Unidad u1 = unidad(curso, 1);
+        Unidad u2 = unidad(curso, 2);
+        when(cursoRepository.findWithDocenteById(curso.getId())).thenReturn(Optional.of(curso));
+        when(unidadRepository.findByCursoIdOrderByNumeroAsc(curso.getId())).thenReturn(List.of(u1, u2));
+
+        assertThatThrownBy(() -> unidadService.reordenar(curso.getId(), new ReordenarRequest(List.of(
+            new ReordenarRequest.ItemOrden(u1.getId(), 1),
+            new ReordenarRequest.ItemOrden(u2.getId(), 2)
+        )))).isInstanceOfSatisfying(BusinessException.class, ex ->
+            org.assertj.core.api.Assertions.assertThat(ex.getCodigo()).isEqualTo("ORDEN_SIN_CAMBIOS"));
+        }
+
+        @Test
+        void reordenar_cuandoNoEsDocenteDueno_lanzaAccessDenied() {
+        Curso curso = cursoDeDocente();
+        autenticarComo(UUID.randomUUID(), "DOCENTE");
+        when(cursoRepository.findWithDocenteById(curso.getId())).thenReturn(Optional.of(curso));
+
+        assertThatThrownBy(() -> unidadService.reordenar(curso.getId(), new ReordenarRequest(List.of(
+            new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1)
+        )))).isInstanceOf(AccessDeniedException.class);
+        }
+
+        private Unidad unidad(Curso curso, int numero) {
+        Unidad unidad = new Unidad();
+        unidad.setId(UUID.randomUUID());
+        unidad.setCurso(curso);
+        unidad.setNumero(numero);
+        unidad.setTitulo("U" + numero);
+        return unidad;
+        }
 }

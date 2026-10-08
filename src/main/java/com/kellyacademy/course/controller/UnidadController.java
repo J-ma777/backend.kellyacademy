@@ -2,9 +2,12 @@ package com.kellyacademy.course.controller;
 
 import com.kellyacademy.course.dto.request.ActualizarUnidadRequest;
 import com.kellyacademy.course.dto.request.CrearUnidadRequest;
+import com.kellyacademy.course.dto.request.ReordenarRequest;
 import com.kellyacademy.course.dto.response.UnidadResponse;
 import com.kellyacademy.course.dto.response.UnidadResumenResponse;
+import com.kellyacademy.course.dto.response.SemanaResumenResponse;
 import com.kellyacademy.course.service.UnidadService;
+import com.kellyacademy.course.service.SemanaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,6 +31,7 @@ import java.util.UUID;
 public class UnidadController {
 
     private final UnidadService unidadService;
+    private final SemanaService semanaService;
 
     // Listado por curso: sin paginacion, las unidades de un curso son pocas (4-8 tipico).
     @GetMapping
@@ -56,6 +60,14 @@ public class UnidadController {
             @Valid @RequestBody ActualizarUnidadRequest request
     ) {
         return ResponseEntity.ok(unidadService.actualizar(id, request));
+    }
+
+    @PutMapping("/{id}/semanas/reordenar")
+    public ResponseEntity<List<SemanaResumenResponse>> reordenarSemanas(
+            @PathVariable UUID id,
+            @Valid @RequestBody ReordenarRequest request
+    ) {
+        return ResponseEntity.ok(semanaService.reordenar(id, request));
     }
 
     @DeleteMapping("/{id}")

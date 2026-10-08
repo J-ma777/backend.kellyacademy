@@ -1,5 +1,6 @@
 package com.kellyacademy.communication.controller;
 
+import com.kellyacademy.communication.dto.request.CambiarAsuntoConversacionRequest;
 import com.kellyacademy.communication.dto.request.CrearConversacionRequest;
 import com.kellyacademy.communication.dto.response.ConversacionResponse;
 import com.kellyacademy.shared.exception.ErrorResponse;
@@ -114,5 +115,99 @@ class ConversacionControllerIT extends IntegrationTestBase {
                 get("/api/conversaciones/" + id, docenteAjenoToken, ErrorResponse.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // -------- cambiarAsunto --------
+
+    @Test
+    void cambiarAsunto_comoParticipante_200() {
+        CrearConversacionRequest req = new CrearConversacionRequest(null, otroId, "Original");
+        ConversacionResponse creada = post(
+                "/api/conversaciones", docenteDuenoToken, req, ConversacionResponse.class
+        ).getBody();
+        UUID id = Objects.requireNonNull(creada).id();
+
+        CambiarAsuntoConversacionRequest cambio =
+                new CambiarAsuntoConversacionRequest("Renombrada");
+
+        ResponseEntity<ConversacionResponse> resp = patch(
+                "/api/conversaciones/" + id + "/asunto",
+                docenteDuenoToken, cambio, ConversacionResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).asunto()).isEqualTo("Renombrada");
+    }
+
+    @Test
+    void cambiarAsunto_comoNoParticipante_403() {
+        CrearConversacionRequest req = new CrearConversacionRequest(null, otroId, "Original");
+        ConversacionResponse creada = post(
+                "/api/conversaciones", docenteDuenoToken, req, ConversacionResponse.class
+        ).getBody();
+        UUID id = Objects.requireNonNull(creada).id();
+
+        CambiarAsuntoConversacionRequest cambio =
+                new CambiarAsuntoConversacionRequest("Renombrada");
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/conversaciones/" + id + "/asunto",
+                docenteAjenoToken, cambio, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void cambiarAsunto_mismoAsunto_400() {
+        CrearConversacionRequest req = new CrearConversacionRequest(null, otroId, "Original");
+        ConversacionResponse creada = post(
+                "/api/conversaciones", docenteDuenoToken, req, ConversacionResponse.class
+        ).getBody();
+        UUID id = Objects.requireNonNull(creada).id();
+
+        CambiarAsuntoConversacionRequest cambio =
+                new CambiarAsuntoConversacionRequest("Original");
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/conversaciones/" + id + "/asunto",
+                docenteDuenoToken, cambio, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo())
+                .isEqualTo("ASUNTO_SIN_CAMBIOS");
+    }
+
+    @Test
+    void cambiarAsunto_asuntoVacio_400() {
+        CrearConversacionRequest req = new CrearConversacionRequest(null, otroId, "Original");
+        ConversacionResponse creada = post(
+                "/api/conversaciones", docenteDuenoToken, req, ConversacionResponse.class
+        ).getBody();
+        UUID id = Objects.requireNonNull(creada).id();
+
+        CambiarAsuntoConversacionRequest cambio =
+                new CambiarAsuntoConversacionRequest("");
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/conversaciones/" + id + "/asunto",
+                docenteDuenoToken, cambio, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void cambiarAsunto_conversacionInexistente_404() {
+        CambiarAsuntoConversacionRequest cambio =
+                new CambiarAsuntoConversacionRequest("X");
+
+        ResponseEntity<ErrorResponse> resp = patch(
+                "/api/conversaciones/" + UUID.randomUUID() + "/asunto",
+                docenteDuenoToken, cambio, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 }

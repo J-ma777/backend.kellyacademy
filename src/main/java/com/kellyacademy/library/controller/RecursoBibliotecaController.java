@@ -4,6 +4,7 @@ import com.kellyacademy.course.enums.NivelCefr;
 import com.kellyacademy.course.enums.TipoMaterial;
 import com.kellyacademy.library.dto.request.ActualizarRecursoRequest;
 import com.kellyacademy.library.dto.request.CrearRecursoRequest;
+import com.kellyacademy.library.dto.response.DescargaRecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResumenResponse;
 import com.kellyacademy.library.service.RecursoBibliotecaService;
@@ -40,6 +41,11 @@ public class RecursoBibliotecaController {
     @GetMapping("/{id}")
     public ResponseEntity<RecursoResponse> obtener(@PathVariable UUID id) {
         return ResponseEntity.ok(recursoService.obtener(id));
+    }
+
+    @PostMapping("/{id}/descargar")
+    public ResponseEntity<DescargaRecursoResponse> descargar(@PathVariable UUID id) {
+        return ResponseEntity.ok(recursoService.descargar(id));
     }
 
     @PostMapping

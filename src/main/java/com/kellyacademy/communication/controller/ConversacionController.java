@@ -1,5 +1,6 @@
 package com.kellyacademy.communication.controller;
 
+import com.kellyacademy.communication.dto.request.CambiarAsuntoConversacionRequest;
 import com.kellyacademy.communication.dto.request.CrearConversacionRequest;
 import com.kellyacademy.communication.dto.response.ConversacionResponse;
 import com.kellyacademy.communication.dto.response.ConversacionResumenResponse;
@@ -39,6 +40,13 @@ public class ConversacionController {
     @PostMapping
     public ResponseEntity<ConversacionResponse> crear(@Valid @RequestBody CrearConversacionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(conversacionService.crear(request));
+    }
+
+    @PatchMapping("/{id}/asunto")
+    public ResponseEntity<ConversacionResponse> cambiarAsunto(
+            @PathVariable UUID id,
+            @Valid @RequestBody CambiarAsuntoConversacionRequest request) {
+        return ResponseEntity.ok(conversacionService.cambiarAsunto(id, request));
     }
 
     @DeleteMapping("/{id}")

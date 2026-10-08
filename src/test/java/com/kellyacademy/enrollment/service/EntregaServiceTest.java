@@ -247,6 +247,36 @@ class EntregaServiceTest {
                 .hasMessageContaining("calificada");
     }
 
+        @Test
+        void eliminar_cuandoCalificada_lanzaBusinessException() {
+                UUID entregaId = UUID.randomUUID();
+                Entrega entrega = new Entrega();
+                entrega.setId(entregaId);
+                entrega.setEstado(EstadoEntrega.CALIFICADA);
+
+                when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
+
+                assertThatThrownBy(() -> entregaService.eliminar(entregaId))
+                                .isInstanceOf(BusinessException.class)
+                                .hasMessageContaining("No se puede eliminar una entrega calificada");
+
+                verify(entregaRepository, never()).delete(any(Entrega.class));
+        }
+
+        @Test
+        void eliminar_cuandoPendiente_ok() {
+                UUID entregaId = UUID.randomUUID();
+                Entrega entrega = new Entrega();
+                entrega.setId(entregaId);
+                entrega.setEstado(EstadoEntrega.PENDIENTE);
+
+                when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
+
+                entregaService.eliminar(entregaId);
+
+                verify(entregaRepository).delete(entrega);
+        }
+
     // -------- calificar (SLICE #21) --------
 
     @Test

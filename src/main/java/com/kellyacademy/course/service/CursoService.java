@@ -111,6 +111,13 @@ public class CursoService {
 
         validarPropietarioOAdmin(curso);
 
+        if (curso.getEstado() == EstadoCurso.ACTIVO || curso.getEstado() == EstadoCurso.FINALIZADO) {
+            throw new BusinessException(
+                    "CURSO_NO_ELIMINABLE",
+                    "No se puede eliminar un curso ACTIVO o FINALIZADO. Archívalo primero"
+            );
+        }
+
         cursoRepository.delete(curso);
     }
 

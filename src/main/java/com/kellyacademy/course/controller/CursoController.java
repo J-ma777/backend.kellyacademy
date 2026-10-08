@@ -4,11 +4,14 @@ import com.kellyacademy.course.dto.request.ActualizarCursoRequest;
 import com.kellyacademy.course.dto.request.CambiarDocenteCursoRequest;
 import com.kellyacademy.course.dto.request.CambiarEstadoCursoRequest;
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
+import com.kellyacademy.course.dto.request.ReordenarRequest;
 import com.kellyacademy.course.dto.response.CursoResponse;
 import com.kellyacademy.course.dto.response.CursoResumenResponse;
+import com.kellyacademy.course.dto.response.UnidadResumenResponse;
 import com.kellyacademy.course.enums.EstadoCurso;
 import com.kellyacademy.course.enums.NivelCefr;
 import com.kellyacademy.course.service.CursoService;
+import com.kellyacademy.course.service.UnidadService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -19,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -27,6 +31,7 @@ import java.util.UUID;
 public class CursoController {
 
     private final CursoService cursoService;
+    private final UnidadService unidadService;
 
     @GetMapping
     public ResponseEntity<Page<CursoResumenResponse>> listar(
@@ -70,6 +75,14 @@ public class CursoController {
             @Valid @RequestBody CambiarDocenteCursoRequest request
     ) {
         return ResponseEntity.ok(cursoService.cambiarDocente(id, request));
+    }
+
+    @PutMapping("/{id}/unidades/reordenar")
+    public ResponseEntity<List<UnidadResumenResponse>> reordenarUnidades(
+            @PathVariable UUID id,
+            @Valid @RequestBody ReordenarRequest request
+    ) {
+        return ResponseEntity.ok(unidadService.reordenar(id, request));
     }
 
     @PatchMapping("/{id}/estado")

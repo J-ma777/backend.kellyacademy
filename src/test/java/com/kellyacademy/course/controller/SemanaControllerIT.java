@@ -3,8 +3,10 @@ package com.kellyacademy.course.controller;
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
 import com.kellyacademy.course.dto.request.CrearSemanaRequest;
 import com.kellyacademy.course.dto.request.CrearUnidadRequest;
+import com.kellyacademy.course.dto.request.ReordenarRequest;
 import com.kellyacademy.course.dto.response.CursoResponse;
 import com.kellyacademy.course.dto.response.SemanaResponse;
+import com.kellyacademy.course.dto.response.SemanaResumenResponse;
 import com.kellyacademy.course.dto.response.UnidadResponse;
 import com.kellyacademy.course.enums.NivelCefr;
 import com.kellyacademy.shared.exception.ErrorResponse;
@@ -16,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDate;
 import java.util.UUID;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -102,4 +105,100 @@ class SemanaControllerIT extends IntegrationTestBase {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
+
+        @Test
+        void reordenar_comoDocenteDueno_devuelve200() {
+        SemanaResponse s1 = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+        SemanaResponse s2 = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
+
+        ResponseEntity<SemanaResumenResponse[]> resp = put(
+            "/api/unidades/" + unidadId + "/semanas/reordenar", docenteDuenoToken,
+            new ReordenarRequest(List.of(
+                new ReordenarRequest.ItemOrden(s2.id(), 1),
+                new ReordenarRequest.ItemOrden(s1.id(), 2)
+            )), SemanaResumenResponse[].class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody()[0].id()).isEqualTo(s2.id());
+        }
+
+        @Test
+        void reordenar_comoAdmin_devuelve200() {
+        SemanaResponse s1 = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+        SemanaResponse s2 = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
+
+        ResponseEntity<SemanaResumenResponse[]> resp = put(
+            "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
+            new ReordenarRequest(List.of(
+                new ReordenarRequest.ItemOrden(s2.id(), 1),
+                new ReordenarRequest.ItemOrden(s1.id(), 2)
+            )), SemanaResumenResponse[].class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+
+        @Test
+        void reordenar_comoDocenteAjeno_devuelve403() {
+        ResponseEntity<ErrorResponse> resp = put(
+            "/api/unidades/" + unidadId + "/semanas/reordenar", docenteAjenoToken,
+            new ReordenarRequest(List.of(new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1))),
+            ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+
+        @Test
+        void reordenar_faltanIds_devuelve400() {
+        SemanaResponse s1 = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+        post("/api/semanas", adminToken, new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class);
+
+        ResponseEntity<ErrorResponse> resp = put(
+            "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
+            new ReordenarRequest(List.of(new ReordenarRequest.ItemOrden(s1.id(), 1))), ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("ORDEN_INCOMPLETO");
+        }
+
+        @Test
+        void reordenar_idsAjenos_devuelve400() {
+        SemanaResponse s1 = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+        SemanaResponse s2 = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
+
+        ResponseEntity<ErrorResponse> resp = put(
+            "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
+            new ReordenarRequest(List.of(
+                new ReordenarRequest.ItemOrden(s1.id(), 1),
+                new ReordenarRequest.ItemOrden(s2.id(), 2),
+                new ReordenarRequest.ItemOrden(UUID.randomUUID(), 3)
+            )), ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("ORDEN_CON_IDS_AJENOS");
+        }
+
+        @Test
+        void reordenar_numerosDuplicados_devuelve400() {
+        SemanaResponse s1 = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+        SemanaResponse s2 = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
+
+        ResponseEntity<ErrorResponse> resp = put(
+            "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
+            new ReordenarRequest(List.of(
+                new ReordenarRequest.ItemOrden(s1.id(), 1),
+                new ReordenarRequest.ItemOrden(s2.id(), 1)
+            )), ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("ORDEN_CON_NUMEROS_DUPLICADOS");
+        }
 }

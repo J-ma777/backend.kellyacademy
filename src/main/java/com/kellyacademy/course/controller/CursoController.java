@@ -1,6 +1,7 @@
 package com.kellyacademy.course.controller;
 
 import com.kellyacademy.course.dto.request.ActualizarCursoRequest;
+import com.kellyacademy.course.dto.request.CambiarDocenteCursoRequest;
 import com.kellyacademy.course.dto.request.CambiarEstadoCursoRequest;
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
 import com.kellyacademy.course.dto.response.CursoResponse;
@@ -60,6 +61,15 @@ public class CursoController {
             @Valid @RequestBody ActualizarCursoRequest request
     ) {
         return ResponseEntity.ok(cursoService.actualizar(id, request));
+    }
+
+    @PatchMapping("/{id}/docente")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<CursoResponse> cambiarDocente(
+            @PathVariable UUID id,
+            @Valid @RequestBody CambiarDocenteCursoRequest request
+    ) {
+        return ResponseEntity.ok(cursoService.cambiarDocente(id, request));
     }
 
     @PatchMapping("/{id}/estado")

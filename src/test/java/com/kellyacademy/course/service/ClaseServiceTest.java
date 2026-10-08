@@ -1,6 +1,7 @@
 package com.kellyacademy.course.service;
 
 import com.kellyacademy.course.dto.request.CrearClaseRequest;
+import com.kellyacademy.course.dto.request.CambiarSemanaRequest;
 import com.kellyacademy.course.entity.Clase;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.entity.Semana;
@@ -192,4 +193,79 @@ class ClaseServiceTest {
 
         verify(claseRepository).save(any(Clase.class));
     }
+
+        @Test
+        void cambiarSemana_ok() {
+                Semana actual = semanaDeDocente();
+                Semana destino = semanaMismaCurso(actual);
+                Clase clase = new Clase();
+                clase.setSemana(actual);
+                CambiarSemanaRequest request = new CambiarSemanaRequest(destino.getId());
+
+                when(claseRepository.findWithSemanaCursoDocenteById(any())).thenReturn(Optional.of(clase));
+                when(semanaRepository.findWithUnidadCursoDocenteById(destino.getId())).thenReturn(Optional.of(destino));
+
+                claseService.cambiarSemana(UUID.randomUUID(), request);
+
+                assertThat(clase.getSemana()).isSameAs(destino);
+                verify(claseRepository, never()).save(any());
+        }
+
+        @Test
+        void cambiarSemana_mismaSemana_lanzaBusinessException() {
+                Semana actual = semanaDeDocente();
+                Clase clase = new Clase();
+                clase.setSemana(actual);
+                when(claseRepository.findWithSemanaCursoDocenteById(any())).thenReturn(Optional.of(clase));
+                when(semanaRepository.findWithUnidadCursoDocenteById(actual.getId())).thenReturn(Optional.of(actual));
+
+                assertThatThrownBy(() -> claseService.cambiarSemana(UUID.randomUUID(), new CambiarSemanaRequest(actual.getId())))
+                                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                                        assertThat(ex.getCodigo()).isEqualTo("SEMANA_SIN_CAMBIOS");
+                                        assertThat(ex.getMessage()).contains("pertenece");
+                                });
+        }
+
+        @Test
+        void cambiarSemana_semanaFueraDeCurso_lanzaBusinessException() {
+                Semana actual = semanaDeDocente();
+                Semana destino = semanaDeOtroCurso();
+                Clase clase = new Clase();
+                clase.setSemana(actual);
+                when(claseRepository.findWithSemanaCursoDocenteById(any())).thenReturn(Optional.of(clase));
+                when(semanaRepository.findWithUnidadCursoDocenteById(destino.getId())).thenReturn(Optional.of(destino));
+
+                assertThatThrownBy(() -> claseService.cambiarSemana(UUID.randomUUID(), new CambiarSemanaRequest(destino.getId())))
+                                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                                        assertThat(ex.getCodigo()).isEqualTo("SEMANA_FUERA_DE_CURSO");
+                                        assertThat(ex.getMessage()).contains("cursos distintos");
+                                });
+        }
+
+        @Test
+        void cambiarSemana_semanaNoExiste_lanzaResourceNotFound() {
+                Semana actual = semanaDeDocente();
+                Clase clase = new Clase();
+                clase.setSemana(actual);
+                UUID destinoId = UUID.randomUUID();
+                when(claseRepository.findWithSemanaCursoDocenteById(any())).thenReturn(Optional.of(clase));
+                when(semanaRepository.findWithUnidadCursoDocenteById(destinoId)).thenReturn(Optional.empty());
+
+                assertThatThrownBy(() -> claseService.cambiarSemana(UUID.randomUUID(), new CambiarSemanaRequest(destinoId)))
+                                .isInstanceOf(ResourceNotFoundException.class)
+                                .hasMessageContaining(destinoId.toString());
+        }
+
+        private Semana semanaMismaCurso(Semana actual) {
+                Semana destino = new Semana();
+                destino.setId(UUID.randomUUID());
+                destino.setUnidad(actual.getUnidad());
+                return destino;
+        }
+
+        private Semana semanaDeOtroCurso() {
+                Semana destino = semanaDeDocente();
+                destino.setId(UUID.randomUUID());
+                return destino;
+        }
 }

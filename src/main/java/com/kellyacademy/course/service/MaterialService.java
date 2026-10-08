@@ -1,6 +1,7 @@
 package com.kellyacademy.course.service;
 
 import com.kellyacademy.course.dto.request.ActualizarMaterialRequest;
+import com.kellyacademy.course.dto.request.CambiarSemanaRequest;
 import com.kellyacademy.course.dto.request.CrearMaterialRequest;
 import com.kellyacademy.course.dto.response.MaterialResponse;
 import com.kellyacademy.course.dto.response.MaterialResumenResponse;
@@ -82,6 +83,33 @@ public class MaterialService {
 
         materialMapper.actualizarDesdeRequest(request, material);
 
+        return materialMapper.toResponse(material);
+    }
+
+    public MaterialResponse cambiarSemana(UUID id, CambiarSemanaRequest request) {
+        Material material = materialRepository.findWithSemanaCursoDocenteById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+        Semana semanaActual = material.getSemana();
+        Semana semanaDestino = semanaRepository.findWithUnidadCursoDocenteById(request.semanaId())
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_SEMANA, "id", request.semanaId()));
+
+        validarAutorizacion(semanaActual);
+
+        if (semanaActual.getId().equals(semanaDestino.getId())) {
+            throw new BusinessException(
+                    "SEMANA_SIN_CAMBIOS",
+                    "El recurso ya pertenece a esa semana"
+            );
+        }
+        if (!semanaActual.getUnidad().getCurso().getId()
+                .equals(semanaDestino.getUnidad().getCurso().getId())) {
+            throw new BusinessException(
+                    "SEMANA_FUERA_DE_CURSO",
+                    "No se puede mover entre cursos distintos"
+            );
+        }
+
+        material.setSemana(semanaDestino);
         return materialMapper.toResponse(material);
     }
 

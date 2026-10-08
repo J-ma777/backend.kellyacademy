@@ -31,6 +31,14 @@ public class MensajeController {
         return ResponseEntity.ok(mensajeService.listar(conversacionId, pageable));
     }
 
+    @GetMapping("/conversaciones/{conversacionId}/mensajes/ultimos")
+    public ResponseEntity<java.util.List<MensajeResumenResponse>> ultimos(
+            @PathVariable UUID conversacionId,
+            @RequestParam(defaultValue = "20") int limit
+    ) {
+        return ResponseEntity.ok(mensajeService.ultimos(conversacionId, limit));
+    }
+
     @GetMapping("/mensajes/{id}")
     public ResponseEntity<MensajeResponse> obtener(@PathVariable UUID id) {
         return ResponseEntity.ok(mensajeService.obtener(id));

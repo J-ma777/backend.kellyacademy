@@ -1,6 +1,7 @@
 package com.kellyacademy.course.service;
 
 import com.kellyacademy.course.dto.request.ActualizarCursoRequest;
+import com.kellyacademy.course.dto.request.CambiarDocenteCursoRequest;
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
 import com.kellyacademy.course.dto.response.CursoResponse;
 import com.kellyacademy.course.dto.response.CursoResumenResponse;
@@ -100,6 +101,26 @@ public class CursoService {
         validarFechas(request.fechaInicio(), request.fechaFin());
 
         cursoMapper.actualizarDesdeRequest(request, curso);
+
+        return cursoMapper.toResponse(curso);
+    }
+
+    public CursoResponse cambiarDocente(UUID id, CambiarDocenteCursoRequest request) {
+        Curso curso = cursoRepository.findWithDocenteById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+
+        if (curso.getDocente().getId().equals(request.docenteId())) {
+            throw new BusinessException(
+                "CURSO_DOCENTE_SIN_CAMBIOS",
+                "El curso ya tiene asignado ese docente"
+            );
+        }
+
+        Usuario docente = usuarioRepository.findWithRolesById(request.docenteId())
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_USUARIO, "id", request.docenteId()));
+
+        validarDocenteTieneRolDocente(docente);
+        curso.setDocente(docente);
 
         return cursoMapper.toResponse(curso);
     }

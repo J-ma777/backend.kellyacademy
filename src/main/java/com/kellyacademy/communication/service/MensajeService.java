@@ -11,12 +11,14 @@ import com.kellyacademy.communication.repository.ConversacionRepository;
 import com.kellyacademy.communication.repository.MensajeRepository;
 import com.kellyacademy.communication.specification.MensajeSpecifications;
 import com.kellyacademy.shared.config.AppTime;
+import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
 import com.kellyacademy.shared.util.SecurityUtils;
 import com.kellyacademy.user.entity.Usuario;
 import com.kellyacademy.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
@@ -24,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -53,6 +56,28 @@ public class MensajeService {
         return mensajeRepository.findAll(spec, pageable)
                 .map(mensajeMapper::toResumenResponse);
     }
+
+            @Transactional(readOnly = true)
+            public List<MensajeResumenResponse> ultimos(UUID conversacionId, int limit) {
+            if (limit < 1 || limit > 100) {
+                throw new BusinessException(
+                    "LIMIT_INVALIDO",
+                    "El limite debe estar entre 1 y 100"
+                );
+            }
+
+            Conversacion conversacion = conversacionRepository.findWithParticipantesById(conversacionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversacion", "id", conversacionId));
+
+            validarParticipanteOAdmin(conversacion);
+
+            return mensajeRepository.findByConversacionIdOrderByEnviadoAtDesc(
+                    conversacionId,
+                    PageRequest.of(0, limit)
+                ).stream()
+                .map(mensajeMapper::toResumenResponse)
+                .toList();
+            }
 
     // -------- obtener --------
 

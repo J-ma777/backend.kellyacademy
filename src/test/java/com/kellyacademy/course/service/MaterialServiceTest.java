@@ -1,6 +1,7 @@
 package com.kellyacademy.course.service;
 
 import com.kellyacademy.course.dto.request.CrearMaterialRequest;
+import com.kellyacademy.course.dto.request.CambiarSemanaRequest;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.entity.Material;
 import com.kellyacademy.course.entity.Semana;
@@ -204,4 +205,66 @@ class MaterialServiceTest {
         assertThatThrownBy(() -> materialService.crear(request))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+        @Test
+        void cambiarSemana_ok() {
+                Semana actual = semanaDeDocente();
+                Semana destino = semanaMismaCurso(actual);
+                Material material = new Material();
+                material.setSemana(actual);
+                when(materialRepository.findWithSemanaCursoDocenteById(any())).thenReturn(Optional.of(material));
+                when(semanaRepository.findWithUnidadCursoDocenteById(destino.getId())).thenReturn(Optional.of(destino));
+
+                materialService.cambiarSemana(UUID.randomUUID(), new CambiarSemanaRequest(destino.getId()));
+
+                assertThat(material.getSemana()).isSameAs(destino);
+                verify(materialRepository, never()).save(any());
+        }
+
+        @Test
+        void cambiarSemana_mismaSemana_lanzaBusinessException() {
+                Semana actual = semanaDeDocente();
+                Material material = new Material();
+                material.setSemana(actual);
+                when(materialRepository.findWithSemanaCursoDocenteById(any())).thenReturn(Optional.of(material));
+                when(semanaRepository.findWithUnidadCursoDocenteById(actual.getId())).thenReturn(Optional.of(actual));
+
+                assertThatThrownBy(() -> materialService.cambiarSemana(UUID.randomUUID(), new CambiarSemanaRequest(actual.getId())))
+                                .isInstanceOfSatisfying(BusinessException.class, ex ->
+                                                assertThat(ex.getCodigo()).isEqualTo("SEMANA_SIN_CAMBIOS"));
+        }
+
+        @Test
+        void cambiarSemana_semanaFueraDeCurso_lanzaBusinessException() {
+                Semana actual = semanaDeDocente();
+                Semana destino = semanaDeDocente();
+                Material material = new Material();
+                material.setSemana(actual);
+                when(materialRepository.findWithSemanaCursoDocenteById(any())).thenReturn(Optional.of(material));
+                when(semanaRepository.findWithUnidadCursoDocenteById(destino.getId())).thenReturn(Optional.of(destino));
+
+                assertThatThrownBy(() -> materialService.cambiarSemana(UUID.randomUUID(), new CambiarSemanaRequest(destino.getId())))
+                                .isInstanceOfSatisfying(BusinessException.class, ex ->
+                                                assertThat(ex.getCodigo()).isEqualTo("SEMANA_FUERA_DE_CURSO"));
+        }
+
+        @Test
+        void cambiarSemana_semanaNoExiste_lanzaResourceNotFound() {
+                Semana actual = semanaDeDocente();
+                Material material = new Material();
+                material.setSemana(actual);
+                UUID destinoId = UUID.randomUUID();
+                when(materialRepository.findWithSemanaCursoDocenteById(any())).thenReturn(Optional.of(material));
+                when(semanaRepository.findWithUnidadCursoDocenteById(destinoId)).thenReturn(Optional.empty());
+
+                assertThatThrownBy(() -> materialService.cambiarSemana(UUID.randomUUID(), new CambiarSemanaRequest(destinoId)))
+                                .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        private Semana semanaMismaCurso(Semana actual) {
+                Semana destino = new Semana();
+                destino.setId(UUID.randomUUID());
+                destino.setUnidad(actual.getUnidad());
+                return destino;
+        }
 }

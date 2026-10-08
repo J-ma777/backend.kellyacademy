@@ -22,6 +22,12 @@ public interface MensajeRepository extends
 
     List<Mensaje> findByConversacionIdOrderByEnviadoAtAsc(UUID conversacionId);
 
+    @EntityGraph(attributePaths = {
+            "conversacion",
+            "remitente"
+    })
+    List<Mensaje> findByConversacionIdOrderByEnviadoAtDesc(UUID conversacionId, Pageable pageable);
+
     long countByConversacionIdAndLeidoFalse(UUID conversacionId);
 
     long countByConversacionIdAndRemitenteIdNotAndLeidoFalse(UUID conversacionId, UUID remitenteId);

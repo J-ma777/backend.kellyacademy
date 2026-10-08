@@ -2,6 +2,7 @@ package com.kellyacademy.communication.service;
 
 import com.kellyacademy.communication.dto.request.CrearMensajeRequest;
 import com.kellyacademy.communication.dto.response.MensajeResponse;
+import com.kellyacademy.communication.dto.response.MensajeResumenResponse;
 import com.kellyacademy.communication.entity.Conversacion;
 import com.kellyacademy.communication.entity.Mensaje;
 import com.kellyacademy.communication.enums.TipoNotificacion;
@@ -10,6 +11,7 @@ import com.kellyacademy.communication.repository.ConversacionRepository;
 import com.kellyacademy.communication.repository.MensajeRepository;
 import com.kellyacademy.security.user.CustomUserDetails;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
+import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.user.entity.Rol;
 import com.kellyacademy.user.entity.Usuario;
 import com.kellyacademy.user.repository.UsuarioRepository;
@@ -25,6 +27,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -138,5 +141,69 @@ class MensajeServiceTest {
 
         assertThatThrownBy(() -> mensajeService.crear(conversacionId, request))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void ultimos_cuandoEsParticipante_devuelveLista() {
+        autenticarComo(autenticado);
+        Mensaje mensaje = new Mensaje();
+        mensaje.setConversacion(conversacion);
+        MensajeResumenResponse resumen = mock(MensajeResumenResponse.class);
+
+        when(conversacionRepository.findWithParticipantesById(conversacionId)).thenReturn(Optional.of(conversacion));
+        when(mensajeRepository.findByConversacionIdOrderByEnviadoAtDesc(eq(conversacionId), any()))
+                .thenReturn(List.of(mensaje));
+        when(mensajeMapper.toResumenResponse(mensaje)).thenReturn(resumen);
+
+        List<MensajeResumenResponse> resultado = mensajeService.ultimos(conversacionId, 20);
+
+        assertThat(resultado).containsExactly(resumen);
+    }
+
+    @Test
+    void ultimos_cuandoNoEsParticipante_lanzaAccessDenied() {
+        Usuario ajeno = new Usuario();
+        ajeno.setId(UUID.randomUUID());
+        Rol rol = new Rol();
+        rol.setNombre("ESTUDIANTE");
+        ajeno.setRoles(Set.of(rol));
+        autenticarComo(ajeno);
+        when(conversacionRepository.findWithParticipantesById(conversacionId)).thenReturn(Optional.of(conversacion));
+
+        assertThatThrownBy(() -> mensajeService.ultimos(conversacionId, 20))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void ultimos_cuandoLimitInvalido_lanzaBusinessException() {
+        autenticarComo(autenticado);
+
+        assertThatThrownBy(() -> mensajeService.ultimos(conversacionId, 101))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("LIMIT_INVALIDO");
+                    assertThat(ex.getMessage()).contains("entre 1 y 100");
+                });
+
+        verifyNoInteractions(conversacionRepository, mensajeRepository);
+    }
+
+    @Test
+    void ultimos_ordenDescendente() {
+        autenticarComo(autenticado);
+        Mensaje masNuevo = new Mensaje();
+        Mensaje masAntiguo = new Mensaje();
+        MensajeResumenResponse nuevoResumen = mock(MensajeResumenResponse.class);
+        MensajeResumenResponse antiguoResumen = mock(MensajeResumenResponse.class);
+
+        when(conversacionRepository.findWithParticipantesById(conversacionId)).thenReturn(Optional.of(conversacion));
+        when(mensajeRepository.findByConversacionIdOrderByEnviadoAtDesc(eq(conversacionId), any()))
+                .thenReturn(List.of(masNuevo, masAntiguo));
+        when(mensajeMapper.toResumenResponse(masNuevo)).thenReturn(nuevoResumen);
+        when(mensajeMapper.toResumenResponse(masAntiguo)).thenReturn(antiguoResumen);
+
+        List<MensajeResumenResponse> resultado = mensajeService.ultimos(conversacionId, 2);
+
+        assertThat(resultado).containsExactly(nuevoResumen, antiguoResumen);
+        verify(mensajeRepository).findByConversacionIdOrderByEnviadoAtDesc(eq(conversacionId), any());
     }
 }

@@ -1,6 +1,7 @@
 package com.kellyacademy.course.controller;
 
 import com.kellyacademy.course.dto.request.CambiarEstadoCursoRequest;
+import com.kellyacademy.course.dto.request.CambiarDocenteCursoRequest;
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
 import com.kellyacademy.course.dto.response.CursoResponse;
 import com.kellyacademy.course.enums.EstadoCurso;
@@ -194,5 +195,66 @@ class CursoControllerIT extends IntegrationTestBase {
         ResponseEntity<Void> resp = delete("/api/cursos/" + cursoId, adminToken);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void cambiarDocente_comoAdmin_devuelve200() {
+        UUID cursoId = crearCursoEnBorrador();
+        UUID nuevoDocenteId = crearUsuario("Nuevo", "Docente", "nuevo.docente.curso@kellyacademy.com", "DOCENTE");
+
+        ResponseEntity<CursoResponse> resp = rest.exchange(
+                "/api/cursos/" + cursoId + "/docente",
+                HttpMethod.PATCH,
+                new HttpEntity<>(new CambiarDocenteCursoRequest(nuevoDocenteId), headersConToken(adminToken)),
+                CursoResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody().docente().id()).isEqualTo(nuevoDocenteId);
+    }
+
+    @Test
+    void cambiarDocente_comoDocente_devuelve403() {
+        UUID cursoId = crearCursoEnBorrador();
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/cursos/" + cursoId + "/docente",
+                HttpMethod.PATCH,
+                new HttpEntity<>(new CambiarDocenteCursoRequest(docenteDuenoId), headersConToken(docenteDuenoToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void cambiarDocente_mismoDocente_devuelve400() {
+        UUID cursoId = crearCursoEnBorrador();
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/cursos/" + cursoId + "/docente",
+                HttpMethod.PATCH,
+                new HttpEntity<>(new CambiarDocenteCursoRequest(docenteDuenoId), headersConToken(adminToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("CURSO_DOCENTE_SIN_CAMBIOS");
+    }
+
+    @Test
+    void cambiarDocente_docenteSinRol_devuelve400() {
+        UUID cursoId = crearCursoEnBorrador();
+        UUID estudianteId = crearUsuario("Usuario", "SinDocencia", "sin.docencia.curso@kellyacademy.com", "ESTUDIANTE");
+
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/cursos/" + cursoId + "/docente",
+                HttpMethod.PATCH,
+                new HttpEntity<>(new CambiarDocenteCursoRequest(estudianteId), headersConToken(adminToken)),
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("DOCENTE_SIN_ROL");
     }
 }

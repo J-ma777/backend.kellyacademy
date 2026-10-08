@@ -1,6 +1,7 @@
 package com.kellyacademy.course.controller;
 
 import com.kellyacademy.course.dto.request.ActualizarTareaRequest;
+import com.kellyacademy.course.dto.request.CambiarSemanaRequest;
 import com.kellyacademy.course.dto.request.CrearTareaRequest;
 import com.kellyacademy.course.dto.response.TareaResponse;
 import com.kellyacademy.course.dto.response.TareaResumenResponse;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -54,6 +56,14 @@ public class TareaController {
             @Valid @RequestBody ActualizarTareaRequest request
     ) {
         return ResponseEntity.ok(tareaService.actualizar(id, request));
+    }
+
+    @PatchMapping("/{id}/semana")
+    public ResponseEntity<TareaResponse> cambiarSemana(
+            @PathVariable UUID id,
+            @Valid @RequestBody CambiarSemanaRequest request
+    ) {
+        return ResponseEntity.ok(tareaService.cambiarSemana(id, request));
     }
 
     @DeleteMapping("/{id}")

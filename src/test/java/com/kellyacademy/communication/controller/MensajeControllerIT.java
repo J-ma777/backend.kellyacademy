@@ -122,4 +122,56 @@ class MensajeControllerIT extends IntegrationTestBase {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
+
+        @Test
+        void ultimos_comoParticipante_devuelve200() {
+                post("/api/conversaciones/" + conversacionId + "/mensajes",
+                                docenteDuenoToken, new CrearMensajeRequest("Hola", null), MensajeResponse.class);
+
+                ResponseEntity<String> resp = get(
+                                "/api/conversaciones/" + conversacionId + "/mensajes/ultimos?limit=1",
+                                docenteDuenoToken, String.class
+                );
+
+                assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+                assertThat(resp.getBody()).contains("Hola");
+        }
+
+        @Test
+        void ultimos_comoNoParticipante_devuelve403() {
+                ResponseEntity<ErrorResponse> resp = get(
+                                "/api/conversaciones/" + conversacionId + "/mensajes/ultimos",
+                                docenteAjenoToken, ErrorResponse.class
+                );
+
+                assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+
+        @Test
+        void ultimos_limitInvalido_devuelve400() {
+                ResponseEntity<ErrorResponse> resp = get(
+                                "/api/conversaciones/" + conversacionId + "/mensajes/ultimos?limit=101",
+                                docenteDuenoToken, ErrorResponse.class
+                );
+
+                assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                assertThat(resp.getBody().getCodigo()).isEqualTo("LIMIT_INVALIDO");
+        }
+
+        @Test
+        void ultimos_defaultEs20() {
+                for (int i = 1; i <= 21; i++) {
+                        post("/api/conversaciones/" + conversacionId + "/mensajes",
+                                        docenteDuenoToken, new CrearMensajeRequest("Mensaje " + i, null), MensajeResponse.class);
+                }
+
+                ResponseEntity<String> resp = get(
+                                "/api/conversaciones/" + conversacionId + "/mensajes/ultimos",
+                                docenteDuenoToken, String.class
+                );
+
+                assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+                assertThat(resp.getBody()).contains("Mensaje 21");
+                assertThat(resp.getBody()).doesNotContain("\"cuerpo\":\"Mensaje 1\"");
+        }
 }

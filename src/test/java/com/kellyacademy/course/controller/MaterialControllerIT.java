@@ -4,6 +4,7 @@ import com.kellyacademy.course.dto.request.CrearCursoRequest;
 import com.kellyacademy.course.dto.request.CrearMaterialRequest;
 import com.kellyacademy.course.dto.request.CrearSemanaRequest;
 import com.kellyacademy.course.dto.request.CrearUnidadRequest;
+import com.kellyacademy.course.dto.request.CambiarSemanaRequest;
 import com.kellyacademy.course.dto.response.CursoResponse;
 import com.kellyacademy.course.dto.response.MaterialResponse;
 import com.kellyacademy.course.dto.response.SemanaResponse;
@@ -25,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MaterialControllerIT extends IntegrationTestBase {
 
     private UUID semanaId;
+    private UUID segundaSemanaId;
 
     @BeforeEach
     void prepararJerarquia() {
@@ -40,6 +42,8 @@ class MaterialControllerIT extends IntegrationTestBase {
         CrearSemanaRequest s = new CrearSemanaRequest(unidad.getBody().id(), 1, "S1", null);
         ResponseEntity<SemanaResponse> semana = post("/api/semanas", adminToken, s, SemanaResponse.class);
         semanaId = semana.getBody().id();
+        segundaSemanaId = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidad.getBody().id(), 2, "S2", null), SemanaResponse.class).getBody().id();
     }
 
     @Test
@@ -98,4 +102,63 @@ class MaterialControllerIT extends IntegrationTestBase {
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(resp.getBody().getCodigo()).isEqualTo("SEMANA_ID_REQUERIDO");
     }
+
+        @Test
+        void cambiarSemana_comoDocenteDueno_devuelve200() {
+        UUID materialId = post("/api/materiales", adminToken,
+            new CrearMaterialRequest(semanaId, "M1", "Desc", "https://cdn.example.com/a.pdf", TipoMaterial.PDF, null, null),
+            MaterialResponse.class).getBody().id();
+
+        ResponseEntity<MaterialResponse> resp = patch("/api/materiales/" + materialId + "/semana", docenteDuenoToken,
+            new CambiarSemanaRequest(segundaSemanaId), MaterialResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody().semanaId()).isEqualTo(segundaSemanaId);
+        }
+
+        @Test
+        void cambiarSemana_comoDocenteAjeno_devuelve403() {
+        UUID materialId = post("/api/materiales", adminToken,
+            new CrearMaterialRequest(semanaId, "M1", "Desc", "https://cdn.example.com/a.pdf", TipoMaterial.PDF, null, null),
+            MaterialResponse.class).getBody().id();
+
+        ResponseEntity<ErrorResponse> resp = patch("/api/materiales/" + materialId + "/semana", docenteAjenoToken,
+            new CambiarSemanaRequest(segundaSemanaId), ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+
+        @Test
+        void cambiarSemana_mismaSemana_devuelve400() {
+        UUID materialId = post("/api/materiales", adminToken,
+            new CrearMaterialRequest(semanaId, "M1", "Desc", "https://cdn.example.com/a.pdf", TipoMaterial.PDF, null, null),
+            MaterialResponse.class).getBody().id();
+
+        ResponseEntity<ErrorResponse> resp = patch("/api/materiales/" + materialId + "/semana", adminToken,
+            new CambiarSemanaRequest(semanaId), ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("SEMANA_SIN_CAMBIOS");
+        }
+
+        @Test
+        void cambiarSemana_semanaFueraDeCurso_devuelve400() {
+        CrearCursoRequest curso = new CrearCursoRequest(
+            docenteDuenoId, "Otro curso", null, NivelCefr.B1, null,
+            LocalDate.now().plusDays(1), LocalDate.now().plusMonths(3), 30);
+        UUID otroCursoId = post("/api/cursos", adminToken, curso, CursoResponse.class).getBody().id();
+        UUID otraUnidadId = post("/api/unidades", adminToken,
+            new CrearUnidadRequest(otroCursoId, 1, "Otra unidad", null), UnidadResponse.class).getBody().id();
+        UUID otraSemanaId = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(otraUnidadId, 1, "Otra semana", null), SemanaResponse.class).getBody().id();
+        UUID materialId = post("/api/materiales", adminToken,
+            new CrearMaterialRequest(semanaId, "M1", "Desc", "https://cdn.example.com/a.pdf", TipoMaterial.PDF, null, null),
+            MaterialResponse.class).getBody().id();
+
+        ResponseEntity<ErrorResponse> resp = patch("/api/materiales/" + materialId + "/semana", adminToken,
+            new CambiarSemanaRequest(otraSemanaId), ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("SEMANA_FUERA_DE_CURSO");
+        }
 }

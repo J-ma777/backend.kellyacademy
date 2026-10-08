@@ -1,6 +1,7 @@
 package com.kellyacademy.course.service;
 
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
+import com.kellyacademy.course.dto.request.CambiarDocenteCursoRequest;
 import com.kellyacademy.course.dto.response.CursoResponse;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.enums.EstadoCurso;
@@ -278,6 +279,74 @@ class CursoServiceTest {
         cursoService.eliminar(cursoId);
 
         verify(cursoRepository).delete(curso);
+    }
+
+    @Test
+    void cambiarDocente_ok_actualizaYDevuelveResponse() {
+        UUID cursoId = UUID.randomUUID();
+        Usuario nuevoDocente = docenteConRol();
+        nuevoDocente.setId(UUID.randomUUID());
+        Curso curso = cursoConEstado(cursoId, EstadoCurso.BORRADOR);
+        CambiarDocenteCursoRequest request = new CambiarDocenteCursoRequest(nuevoDocente.getId());
+        CursoResponse response = responseConEstado(cursoId, EstadoCurso.BORRADOR);
+
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(usuarioRepository.findWithRolesById(nuevoDocente.getId())).thenReturn(Optional.of(nuevoDocente));
+        when(cursoMapper.toResponse(curso)).thenReturn(response);
+
+        CursoResponse resultado = cursoService.cambiarDocente(cursoId, request);
+
+        assertThat(resultado).isSameAs(response);
+        assertThat(curso.getDocente()).isSameAs(nuevoDocente);
+        verify(cursoRepository, never()).save(any(Curso.class));
+    }
+
+    @Test
+    void cambiarDocente_cuandoMismoDocente_lanzaBusinessException() {
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = cursoConEstado(cursoId, EstadoCurso.BORRADOR);
+        CambiarDocenteCursoRequest request = new CambiarDocenteCursoRequest(curso.getDocente().getId());
+
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+
+        assertThatThrownBy(() -> cursoService.cambiarDocente(cursoId, request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("CURSO_DOCENTE_SIN_CAMBIOS");
+                    assertThat(ex.getMessage()).contains("asignado");
+                });
+    }
+
+    @Test
+    void cambiarDocente_cuandoDocenteNoExiste_lanzaResourceNotFound() {
+        UUID cursoId = UUID.randomUUID();
+        UUID nuevoDocenteId = UUID.randomUUID();
+        Curso curso = cursoConEstado(cursoId, EstadoCurso.BORRADOR);
+        CambiarDocenteCursoRequest request = new CambiarDocenteCursoRequest(nuevoDocenteId);
+
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(usuarioRepository.findWithRolesById(nuevoDocenteId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> cursoService.cambiarDocente(cursoId, request))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(nuevoDocenteId.toString());
+    }
+
+    @Test
+    void cambiarDocente_cuandoDocenteSinRol_lanzaBusinessException() {
+        UUID cursoId = UUID.randomUUID();
+        Usuario nuevoDocente = docenteSinRol();
+        nuevoDocente.setId(UUID.randomUUID());
+        Curso curso = cursoConEstado(cursoId, EstadoCurso.BORRADOR);
+        CambiarDocenteCursoRequest request = new CambiarDocenteCursoRequest(nuevoDocente.getId());
+
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(usuarioRepository.findWithRolesById(nuevoDocente.getId())).thenReturn(Optional.of(nuevoDocente));
+
+        assertThatThrownBy(() -> cursoService.cambiarDocente(cursoId, request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("DOCENTE_SIN_ROL");
+                    assertThat(ex.getMessage()).contains("DOCENTE");
+                });
     }
 
     @Test

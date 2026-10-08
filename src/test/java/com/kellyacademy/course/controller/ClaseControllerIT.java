@@ -4,6 +4,7 @@ import com.kellyacademy.course.dto.request.CrearClaseRequest;
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
 import com.kellyacademy.course.dto.request.CrearSemanaRequest;
 import com.kellyacademy.course.dto.request.CrearUnidadRequest;
+import com.kellyacademy.course.dto.request.CambiarSemanaRequest;
 import com.kellyacademy.course.dto.response.ClaseResponse;
 import com.kellyacademy.course.dto.response.CursoResponse;
 import com.kellyacademy.course.dto.response.SemanaResponse;
@@ -24,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ClaseControllerIT extends IntegrationTestBase {
 
     private UUID semanaId;
+    private UUID segundaSemanaId;
 
     @BeforeEach
     void prepararJerarquia() {
@@ -39,6 +41,8 @@ class ClaseControllerIT extends IntegrationTestBase {
         CrearSemanaRequest s = new CrearSemanaRequest(unidad.getBody().id(), 1, "S1", null);
         ResponseEntity<SemanaResponse> semana = post("/api/semanas", adminToken, s, SemanaResponse.class);
         semanaId = semana.getBody().id();
+        segundaSemanaId = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(unidad.getBody().id(), 2, "S2", null), SemanaResponse.class).getBody().id();
     }
 
     @Test
@@ -111,4 +115,63 @@ class ClaseControllerIT extends IntegrationTestBase {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
+
+        @Test
+        void cambiarSemana_comoDocenteDueno_devuelve200() {
+        UUID claseId = post("/api/clases", adminToken,
+            new CrearClaseRequest(semanaId, "Clase 1", "Desc", "https://meet.example.com/a", null, null, 60, null),
+            ClaseResponse.class).getBody().id();
+
+        ResponseEntity<ClaseResponse> resp = patch("/api/clases/" + claseId + "/semana", docenteDuenoToken,
+            new CambiarSemanaRequest(segundaSemanaId), ClaseResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody().semanaId()).isEqualTo(segundaSemanaId);
+        }
+
+        @Test
+        void cambiarSemana_comoDocenteAjeno_devuelve403() {
+        UUID claseId = post("/api/clases", adminToken,
+            new CrearClaseRequest(semanaId, "Clase 1", "Desc", "https://meet.example.com/a", null, null, 60, null),
+            ClaseResponse.class).getBody().id();
+
+        ResponseEntity<ErrorResponse> resp = patch("/api/clases/" + claseId + "/semana", docenteAjenoToken,
+            new CambiarSemanaRequest(segundaSemanaId), ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+
+        @Test
+        void cambiarSemana_mismaSemana_devuelve400() {
+        UUID claseId = post("/api/clases", adminToken,
+            new CrearClaseRequest(semanaId, "Clase 1", "Desc", "https://meet.example.com/a", null, null, 60, null),
+            ClaseResponse.class).getBody().id();
+
+        ResponseEntity<ErrorResponse> resp = patch("/api/clases/" + claseId + "/semana", adminToken,
+            new CambiarSemanaRequest(semanaId), ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("SEMANA_SIN_CAMBIOS");
+        }
+
+        @Test
+        void cambiarSemana_semanaFueraDeCurso_devuelve400() {
+        CrearCursoRequest curso = new CrearCursoRequest(
+            docenteDuenoId, "Otro curso", null, NivelCefr.B1, null,
+            LocalDate.now().plusDays(1), LocalDate.now().plusMonths(3), 30);
+        UUID otroCursoId = post("/api/cursos", adminToken, curso, CursoResponse.class).getBody().id();
+        UUID otraUnidadId = post("/api/unidades", adminToken,
+            new CrearUnidadRequest(otroCursoId, 1, "Otra unidad", null), UnidadResponse.class).getBody().id();
+        UUID otraSemanaId = post("/api/semanas", adminToken,
+            new CrearSemanaRequest(otraUnidadId, 1, "Otra semana", null), SemanaResponse.class).getBody().id();
+        UUID claseId = post("/api/clases", adminToken,
+            new CrearClaseRequest(semanaId, "Clase 1", "Desc", "https://meet.example.com/a", null, null, 60, null),
+            ClaseResponse.class).getBody().id();
+
+        ResponseEntity<ErrorResponse> resp = patch("/api/clases/" + claseId + "/semana", adminToken,
+            new CambiarSemanaRequest(otraSemanaId), ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getCodigo()).isEqualTo("SEMANA_FUERA_DE_CURSO");
+        }
 }

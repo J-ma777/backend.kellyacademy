@@ -1,5 +1,6 @@
 package com.kellyacademy.communication.service;
 
+import com.kellyacademy.communication.dto.request.CambiarAsuntoConversacionRequest;
 import com.kellyacademy.communication.dto.request.CrearConversacionRequest;
 import com.kellyacademy.communication.dto.response.ConversacionResponse;
 import com.kellyacademy.communication.dto.response.ConversacionResumenResponse;
@@ -133,6 +134,33 @@ public class ConversacionService {
 
         Conversacion guardada = conversacionRepository.save(entity);
         return conversacionMapper.toResponse(guardada, 0L);
+    }
+
+    // -------- cambiarAsunto --------
+
+    // Cualquier participante (o ADMIN) puede renombrar la conversacion.
+    // Rechaza no-op con ASUNTO_SIN_CAMBIOS, alineado con el patron de estados.
+    public ConversacionResponse cambiarAsunto(UUID id, CambiarAsuntoConversacionRequest request) {
+
+        Conversacion conversacion = conversacionRepository.findWithParticipantesById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversacion", "id", id));
+
+        validarParticipanteOAdmin(conversacion);
+
+        if (request.asunto().equals(conversacion.getAsunto())) {
+            throw new BusinessException(
+                    "ASUNTO_SIN_CAMBIOS",
+                    "El asunto nuevo es igual al actual"
+            );
+        }
+
+        conversacion.setAsunto(request.asunto());
+
+        UUID autenticadoId = SecurityUtils.getUsuarioAutenticadoId();
+        long noLeidos = mensajeRepository
+                .countByConversacionIdAndRemitenteIdNotAndLeidoFalse(id, autenticadoId);
+
+        return conversacionMapper.toResponse(conversacion, noLeidos);
     }
 
     // -------- eliminar --------

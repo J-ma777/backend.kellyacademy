@@ -1,5 +1,6 @@
 package com.kellyacademy.communication.service;
 
+import com.kellyacademy.communication.dto.request.CambiarAsuntoConversacionRequest;
 import com.kellyacademy.communication.dto.request.CrearConversacionRequest;
 import com.kellyacademy.communication.dto.response.ConversacionResponse;
 import com.kellyacademy.communication.entity.Conversacion;
@@ -211,5 +212,92 @@ class ConversacionServiceTest {
         Rol r = new Rol();
         r.setNombre("ESTUDIANTE");
         return r;
+    }
+
+    // -------- cambiarAsunto --------
+
+    @Test
+    void cambiarAsunto_cuandoEsParticipante_actualiza() {
+        autenticarComo(autenticado);
+
+        Conversacion c = new Conversacion();
+        c.setId(conversacionId);
+        c.setAsunto("Viejo");
+        c.setParticipante1(autenticado);
+        c.setParticipante2(otro);
+
+        CambiarAsuntoConversacionRequest request =
+                new CambiarAsuntoConversacionRequest("Nuevo");
+
+        when(conversacionRepository.findWithParticipantesById(conversacionId))
+                .thenReturn(Optional.of(c));
+        when(mensajeRepository.countByConversacionIdAndRemitenteIdNotAndLeidoFalse(conversacionId, autenticadoId))
+                .thenReturn(0L);
+        when(conversacionMapper.toResponse(c, 0L)).thenReturn(mock(ConversacionResponse.class));
+
+        conversacionService.cambiarAsunto(conversacionId, request);
+
+        assertThat(c.getAsunto()).isEqualTo("Nuevo");
+        verify(conversacionRepository, never()).save(any());
+    }
+
+    @Test
+    void cambiarAsunto_cuandoNoEsParticipante_lanzaAccessDenied() {
+        Usuario ajeno = new Usuario();
+        ajeno.setId(UUID.randomUUID());
+        ajeno.setRoles(Set.of(rolEstudiante()));
+        autenticarComo(ajeno);
+
+        Conversacion c = new Conversacion();
+        c.setId(conversacionId);
+        c.setAsunto("Viejo");
+        c.setParticipante1(autenticado);
+        c.setParticipante2(otro);
+
+        CambiarAsuntoConversacionRequest request =
+                new CambiarAsuntoConversacionRequest("Nuevo");
+
+        when(conversacionRepository.findWithParticipantesById(conversacionId))
+                .thenReturn(Optional.of(c));
+
+        assertThatThrownBy(() -> conversacionService.cambiarAsunto(conversacionId, request))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void cambiarAsunto_cuandoEsIgual_lanzaBusinessException() {
+        autenticarComo(autenticado);
+
+        Conversacion c = new Conversacion();
+        c.setId(conversacionId);
+        c.setAsunto("Mismo");
+        c.setParticipante1(autenticado);
+        c.setParticipante2(otro);
+
+        CambiarAsuntoConversacionRequest request =
+                new CambiarAsuntoConversacionRequest("Mismo");
+
+        when(conversacionRepository.findWithParticipantesById(conversacionId))
+                .thenReturn(Optional.of(c));
+
+        assertThatThrownBy(() -> conversacionService.cambiarAsunto(conversacionId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("igual al actual");
+
+        verify(conversacionRepository, never()).save(any());
+    }
+
+    @Test
+    void cambiarAsunto_cuandoNoExiste_lanzaResourceNotFound() {
+        autenticarComo(autenticado);
+
+        CambiarAsuntoConversacionRequest request =
+                new CambiarAsuntoConversacionRequest("Nuevo");
+
+        when(conversacionRepository.findWithParticipantesById(conversacionId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> conversacionService.cambiarAsunto(conversacionId, request))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 }

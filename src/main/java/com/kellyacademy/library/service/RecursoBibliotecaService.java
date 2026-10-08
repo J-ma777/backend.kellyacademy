@@ -4,6 +4,7 @@ import com.kellyacademy.course.enums.NivelCefr;
 import com.kellyacademy.course.enums.TipoMaterial;
 import com.kellyacademy.library.dto.request.ActualizarRecursoRequest;
 import com.kellyacademy.library.dto.request.CrearRecursoRequest;
+import com.kellyacademy.library.dto.response.DescargaRecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResumenResponse;
 import com.kellyacademy.library.entity.RecursoBiblioteca;
@@ -90,6 +91,32 @@ public class RecursoBibliotecaService {
 
         RecursoBiblioteca guardada = recursoRepository.save(recurso);
         return recursoMapper.toResponse(guardada);
+    }
+
+    // -------- descargar --------
+    // Incrementa contadorDescargas de forma atomica y devuelve URLs + contador
+    // actualizado. Cualquier autenticado puede descargar (catalogo publico).
+    public DescargaRecursoResponse descargar(UUID id) {
+
+        // Un solo UPDATE atomico: evita race entre dos descargas simultaneas.
+        int filas = recursoRepository.incrementarContadorDescargas(id);
+        if (filas == 0) {
+            throw new ResourceNotFoundException("RecursoBiblioteca", "id", id);
+        }
+
+        RecursoBiblioteca actualizado = recursoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("RecursoBiblioteca", "id", id));
+
+        // Defensa en profundidad: el recurso siempre debe tener al menos una URL
+        // (deuda #49), pero si la DB fue manipulada externamente, fallamos claro.
+        validarAlMenosUnaUrl(actualizado.getUrlArchivo(), actualizado.getUrlExterno());
+
+        return new DescargaRecursoResponse(
+                actualizado.getId(),
+                actualizado.getUrlArchivo(),
+                actualizado.getUrlExterno(),
+                actualizado.getContadorDescargas()
+        );
     }
 
     // -------- eliminar --------

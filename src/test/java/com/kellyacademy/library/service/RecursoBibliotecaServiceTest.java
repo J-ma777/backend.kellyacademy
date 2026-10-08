@@ -4,6 +4,7 @@ import com.kellyacademy.course.enums.NivelCefr;
 import com.kellyacademy.course.enums.TipoMaterial;
 import com.kellyacademy.library.dto.request.ActualizarRecursoRequest;
 import com.kellyacademy.library.dto.request.CrearRecursoRequest;
+import com.kellyacademy.library.dto.response.DescargaRecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResponse;
 import com.kellyacademy.library.entity.RecursoBiblioteca;
 import com.kellyacademy.library.mapper.RecursoBibliotecaMapper;
@@ -258,5 +259,49 @@ class RecursoBibliotecaServiceTest {
 
         assertThatThrownBy(() -> recursoService.eliminar(id))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // -------- descargar --------
+
+    @Test
+    void descargar_cuandoExiste_incrementaYDevuelve() {
+        recurso.setContadorDescargas(5);
+
+        when(recursoRepository.incrementarContadorDescargas(recursoId)).thenReturn(1);
+        when(recursoRepository.findById(recursoId)).thenReturn(Optional.of(recurso));
+
+        DescargaRecursoResponse resp = recursoService.descargar(recursoId);
+
+        assertThat(resp.id()).isEqualTo(recursoId);
+        assertThat(resp.urlArchivo()).isEqualTo("https://cdn.kelly.com/audio.mp3");
+        assertThat(resp.urlExterno()).isNull();
+        assertThat(resp.contadorDescargas()).isEqualTo(5);
+
+        verify(recursoRepository).incrementarContadorDescargas(recursoId);
+    }
+
+    @Test
+    void descargar_cuandoNoExiste_lanzaResourceNotFound() {
+        UUID id = UUID.randomUUID();
+        when(recursoRepository.incrementarContadorDescargas(id)).thenReturn(0);
+
+        assertThatThrownBy(() -> recursoService.descargar(id))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(recursoRepository, never()).findById(any());
+    }
+
+    @Test
+    void descargar_recursoSinUrl_lanzaBusinessException() {
+        // Defensa en profundidad: la DB fue manipulada fuera del servicio.
+        recurso.setUrlArchivo(null);
+        recurso.setUrlExterno(null);
+
+        when(recursoRepository.incrementarContadorDescargas(recursoId)).thenReturn(1);
+        when(recursoRepository.findById(recursoId)).thenReturn(Optional.of(recurso));
+
+        assertThatThrownBy(() -> recursoService.descargar(recursoId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("al menos una URL");
     }
 }

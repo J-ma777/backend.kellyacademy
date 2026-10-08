@@ -4,11 +4,13 @@ import com.kellyacademy.course.enums.NivelCefr;
 import com.kellyacademy.course.enums.TipoMaterial;
 import com.kellyacademy.library.dto.request.ActualizarRecursoRequest;
 import com.kellyacademy.library.dto.request.CrearRecursoRequest;
+import com.kellyacademy.library.dto.response.DescargaRecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResponse;
 import com.kellyacademy.shared.exception.ErrorResponse;
 import com.kellyacademy.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -247,5 +249,73 @@ class RecursoBibliotecaControllerIT extends IntegrationTestBase {
                 deleteWithBody("/api/recursos/" + creado.id(), docenteDuenoToken, ErrorResponse.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // -------- descargar --------
+
+    @Test
+    void descargar_comoEstudiante_incrementaContador_200() {
+        RecursoResponse creado = Objects.requireNonNull(
+                post("/api/recursos", docenteDuenoToken,
+                        req("https://cdn.kelly.com/audio.mp3", null),
+                        RecursoResponse.class).getBody()
+        );
+
+        ResponseEntity<DescargaRecursoResponse> resp = post(
+                "/api/recursos/" + creado.id() + "/descargar",
+                estudianteToken, null, DescargaRecursoResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).contadorDescargas()).isEqualTo(1);
+        assertThat(resp.getBody().urlArchivo()).isEqualTo("https://cdn.kelly.com/audio.mp3");
+    }
+
+    @Test
+    void descargar_dosVeces_contadorEsDos() {
+        RecursoResponse creado = Objects.requireNonNull(
+                post("/api/recursos", docenteDuenoToken,
+                        req("https://cdn.kelly.com/audio.mp3", null),
+                        RecursoResponse.class).getBody()
+        );
+
+        post("/api/recursos/" + creado.id() + "/descargar",
+                estudianteToken, null, DescargaRecursoResponse.class);
+
+        ResponseEntity<DescargaRecursoResponse> resp = post(
+                "/api/recursos/" + creado.id() + "/descargar",
+                estudianteToken, null, DescargaRecursoResponse.class
+        );
+
+        assertThat(Objects.requireNonNull(resp.getBody()).contadorDescargas()).isEqualTo(2);
+    }
+
+    @Test
+    void descargar_inexistente_404() {
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/recursos/" + UUID.randomUUID() + "/descargar",
+                docenteDuenoToken, null, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void descargar_sinAutenticar_401o403() {
+        RecursoResponse creado = Objects.requireNonNull(
+                post("/api/recursos", docenteDuenoToken,
+                        req("https://cdn.kelly.com/audio.mp3", null),
+                        RecursoResponse.class).getBody()
+        );
+
+        // Sin token: no usamos el helper post (que exige token). Exchange crudo.
+        ResponseEntity<ErrorResponse> resp = rest.exchange(
+                "/api/recursos/" + creado.id() + "/descargar",
+                org.springframework.http.HttpMethod.POST,
+                HttpEntity.EMPTY,
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode().value()).isIn(401, 403);
     }
 }

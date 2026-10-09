@@ -5,6 +5,7 @@ import com.kellyacademy.communication.entity.Notificacion;
 import com.kellyacademy.communication.enums.TipoNotificacion;
 import com.kellyacademy.communication.mapper.NotificacionMapper;
 import com.kellyacademy.communication.repository.NotificacionRepository;
+import com.kellyacademy.communication.service.NotificacionService.NuevaNotificacion;
 import com.kellyacademy.security.user.CustomUserDetails;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
@@ -22,6 +23,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -100,33 +102,139 @@ class NotificacionServiceTest {
         return n;
     }
 
+    private void stubUsuariosYSaveAll(List<Usuario> usuarios) {
+        when(usuarioRepository.findAllById(any())).thenReturn(usuarios);
+        when(notificacionRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(notificacionMapper.toResponse(any(Notificacion.class)))
+                .thenReturn(mock(NotificacionResponse.class));
+    }
+
     // -------- crear (interno) --------
 
     @Test
     void crear_cuandoTodoValido_retornaResponse() {
         // No requiere autenticacion: crear es interno.
-        Notificacion guardada = new Notificacion();
-        guardada.setId(UUID.randomUUID());
-
-        when(usuarioRepository.findById(usuarioId)).thenReturn(Optional.of(usuario));
-        when(notificacionRepository.save(any(Notificacion.class))).thenReturn(guardada);
-        when(notificacionMapper.toResponse(guardada)).thenReturn(mock(NotificacionResponse.class));
+        stubUsuariosYSaveAll(List.of(usuario));
 
         NotificacionResponse response = notificacionService.crear(
                 usuarioId, TipoNotificacion.SISTEMA, "Titulo", "Cuerpo", null
         );
 
         assertThat(response).isNotNull();
-        verify(notificacionRepository).save(any(Notificacion.class));
+        verify(notificacionRepository).saveAll(argThat(lista -> ((List<?>) lista).size() == 1));
+        verify(notificacionRepository, never()).save(any(Notificacion.class));
+    }
+
+    @Test
+    void crear_delegaEnCrearBatchConUnElemento() {
+        stubUsuariosYSaveAll(List.of(usuario));
+
+        notificacionService.crear(usuarioId, TipoNotificacion.SISTEMA, "Titulo", "Cuerpo", "/api/x");
+
+        verify(usuarioRepository).findAllById(argThat(ids -> {
+            List<UUID> lista = new java.util.ArrayList<>();
+            ids.forEach(lista::add);
+            return lista.size() == 1 && lista.contains(usuarioId);
+        }));
+        verify(usuarioRepository, never()).findById(any());
+        verify(notificacionRepository).saveAll(argThat(lista -> ((List<?>) lista).size() == 1));
+        verify(notificacionRepository, never()).save(any(Notificacion.class));
     }
 
     @Test
     void crear_cuandoUsuarioNoExiste_lanzaResourceNotFound() {
-        when(usuarioRepository.findById(usuarioId)).thenReturn(Optional.empty());
+        when(usuarioRepository.findAllById(any())).thenReturn(List.of());
 
         assertThatThrownBy(() -> notificacionService.crear(
                 usuarioId, TipoNotificacion.SISTEMA, "Titulo", "Cuerpo", null
-        )).isInstanceOf(ResourceNotFoundException.class);
+        )).isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(usuarioId.toString());
+    }
+
+    @Test
+    void crearBatch_cuandoListaVacia_noGuarda() {
+        List<NotificacionResponse> resultado = notificacionService.crearBatch(List.of());
+
+        assertThat(resultado).isEmpty();
+        verify(usuarioRepository, never()).findAllById(any());
+        verify(notificacionRepository, never()).saveAll(any());
+        verify(notificacionRepository, never()).save(any());
+    }
+
+    @Test
+    void crearBatch_conVariosDestinatarios_guardaTodosEnUnaLlamada() {
+        Usuario segundo = new Usuario();
+        segundo.setId(otroUsuarioId);
+
+        stubUsuariosYSaveAll(List.of(usuario, segundo));
+
+        List<NuevaNotificacion> lote = List.of(
+                new NuevaNotificacion(usuarioId, TipoNotificacion.ANUNCIO, "T1", null, "/api/a"),
+                new NuevaNotificacion(otroUsuarioId, TipoNotificacion.ANUNCIO, "T1", null, "/api/a")
+        );
+
+        List<NotificacionResponse> resultado = notificacionService.crearBatch(lote);
+
+        assertThat(resultado).hasSize(2);
+        verify(usuarioRepository).findAllById(any());
+        verify(notificacionRepository, times(1)).saveAll(argThat(lista -> ((List<?>) lista).size() == 2));
+        verify(notificacionRepository, never()).save(any(Notificacion.class));
+    }
+
+    @Test
+    void crearBatch_validaTituloCuerpoLinkComoCrear() {
+        NuevaNotificacion tituloVacio = new NuevaNotificacion(
+                usuarioId, TipoNotificacion.SISTEMA, " ", "Cuerpo", null
+        );
+        NuevaNotificacion cuerpoLargo = new NuevaNotificacion(
+                usuarioId, TipoNotificacion.SISTEMA, "Titulo", "x".repeat(501), null
+        );
+        NuevaNotificacion linkInvalido = new NuevaNotificacion(
+                usuarioId, TipoNotificacion.SISTEMA, "Titulo", "Cuerpo", "no-es-url"
+        );
+
+        assertThatThrownBy(() -> notificacionService.crearBatch(List.of(tituloVacio)))
+                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> notificacionService.crearBatch(List.of(cuerpoLargo)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("cuerpo");
+        assertThatThrownBy(() -> notificacionService.crearBatch(List.of(linkInvalido)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("URL");
+
+        verify(usuarioRepository, never()).findAllById(any());
+        verify(notificacionRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void crearBatch_cuandoUsuarioNoExiste_lanzaResourceNotFound() {
+        when(usuarioRepository.findAllById(any())).thenReturn(List.of());
+
+        NuevaNotificacion item = new NuevaNotificacion(
+                usuarioId, TipoNotificacion.SISTEMA, "Titulo", "Cuerpo", null
+        );
+
+        assertThatThrownBy(() -> notificacionService.crearBatch(List.of(item)))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(usuarioId.toString());
+        verify(notificacionRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void crearBatch_cuandoVariosUsuariosUnoNoExiste_lanzaResourceNotFound() {
+        when(usuarioRepository.findAllById(any())).thenReturn(List.of(usuario));
+
+        NuevaNotificacion existente = new NuevaNotificacion(
+                usuarioId, TipoNotificacion.SISTEMA, "Titulo", "Cuerpo", null
+        );
+        NuevaNotificacion faltante = new NuevaNotificacion(
+                otroUsuarioId, TipoNotificacion.SISTEMA, "Titulo", "Cuerpo", null
+        );
+
+        assertThatThrownBy(() -> notificacionService.crearBatch(List.of(existente, faltante)))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(otroUsuarioId.toString());
+        verify(notificacionRepository, never()).saveAll(any());
     }
 
     @Test

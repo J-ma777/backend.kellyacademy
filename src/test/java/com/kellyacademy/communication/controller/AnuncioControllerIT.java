@@ -68,6 +68,24 @@ class AnuncioControllerIT extends IntegrationTestBase {
     }
 
     @Test
+    void crear_anuncioConVariosEstudiantes_persisteNNotificaciones() {
+        UUID estudiante2Id = crearUsuario("Est", "Dos", "est.anuncio2.it@kellyacademy.com", "ESTUDIANTE");
+        UUID estudiante3Id = crearUsuario("Est", "Tres", "est.anuncio3.it@kellyacademy.com", "ESTUDIANTE");
+        post("/api/matriculas", adminToken, new CrearMatriculaRequest(cursoId, estudiante2Id), MatriculaResponse.class);
+        post("/api/matriculas", adminToken, new CrearMatriculaRequest(cursoId, estudiante3Id), MatriculaResponse.class);
+
+        CrearAnuncioRequest req = new CrearAnuncioRequest(cursoId, "Titulo N", "Cuerpo N");
+        ResponseEntity<AnuncioResponse> resp =
+                post("/api/anuncios", docenteDuenoToken, req, AnuncioResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(notificacionRepository.countByUsuarioIdAndLeidaFalse(estudianteId)).isEqualTo(1L);
+        assertThat(notificacionRepository.countByUsuarioIdAndLeidaFalse(estudiante2Id)).isEqualTo(1L);
+        assertThat(notificacionRepository.countByUsuarioIdAndLeidaFalse(estudiante3Id)).isEqualTo(1L);
+        assertThat(notificacionRepository.countByUsuarioIdAndLeidaFalse(docenteDuenoId)).isEqualTo(0L);
+    }
+
+    @Test
     void crear_comoDocenteAjeno_devuelve403() {
         CrearAnuncioRequest req = new CrearAnuncioRequest(cursoId, "Titulo", "Cuerpo");
 

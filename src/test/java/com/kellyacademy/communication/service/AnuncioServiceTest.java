@@ -4,8 +4,10 @@ import com.kellyacademy.communication.dto.request.ActualizarAnuncioRequest;
 import com.kellyacademy.communication.dto.request.CrearAnuncioRequest;
 import com.kellyacademy.communication.dto.response.AnuncioResponse;
 import com.kellyacademy.communication.entity.Anuncio;
+import com.kellyacademy.communication.enums.TipoNotificacion;
 import com.kellyacademy.communication.mapper.AnuncioMapper;
 import com.kellyacademy.communication.repository.AnuncioRepository;
+import com.kellyacademy.communication.service.NotificacionService.NuevaNotificacion;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.repository.CursoRepository;
 import com.kellyacademy.enrollment.entity.Matricula;
@@ -36,7 +38,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -99,6 +100,38 @@ class AnuncioServiceTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
+    private Anuncio anuncioGuardado() {
+        Anuncio guardada = new Anuncio();
+        guardada.setId(anuncioId);
+        guardada.setCurso(curso);
+        guardada.setAutor(docente);
+        guardada.setTitulo("Titulo");
+        guardada.setActivo(true);
+        return guardada;
+    }
+
+    private Usuario usuarioConId(UUID id) {
+        Usuario u = new Usuario();
+        u.setId(id);
+        return u;
+    }
+
+    private Matricula matriculaDe(Usuario estudiante) {
+        Matricula matricula = new Matricula();
+        matricula.setEstudiante(estudiante);
+        return matricula;
+    }
+
+    private void stubCrearAnuncio(CrearAnuncioRequest request, Anuncio guardada, List<Matricula> matriculas) {
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(usuarioRepository.findById(docenteDuenoId)).thenReturn(Optional.of(docente));
+        when(anuncioMapper.toEntity(request)).thenReturn(new Anuncio());
+        when(anuncioRepository.save(any(Anuncio.class))).thenReturn(guardada);
+        when(matriculaRepository.findWithEstudianteByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA))
+                .thenReturn(matriculas);
+        when(anuncioMapper.toResponse(guardada)).thenReturn(mock(AnuncioResponse.class));
+    }
+
     // -------- crear --------
 
     @Test
@@ -130,7 +163,13 @@ class AnuncioServiceTest {
         AnuncioResponse response = anuncioService.crear(request);
 
         assertThat(response).isNotNull();
-        verify(notificacionService).crear(eq(estudiante.getId()), any(), anyString(), eq(null), anyString());
+        verify(notificacionService, times(1)).crearBatch(argThat(lista ->
+                lista.size() == 1
+                        && lista.getFirst().usuarioId().equals(estudiante.getId())
+                        && lista.getFirst().tipo() == TipoNotificacion.ANUNCIO
+                        && lista.getFirst().cuerpo() == null
+        ));
+        verify(notificacionService, never()).crear(any(), any(), anyString(), any(), any());
     }
 
     @Test
@@ -180,6 +219,54 @@ class AnuncioServiceTest {
 
         anuncioService.crear(request);
 
+        verify(notificacionService, times(1)).crearBatch(argThat(List::isEmpty));
+        verify(notificacionService, never()).crear(any(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void crear_cuandoAutorEstaMatriculado_noSeAutoNotifica() {
+        autenticarComo(docente);
+
+        CrearAnuncioRequest request = new CrearAnuncioRequest(cursoId, "Titulo", "Cuerpo");
+        Anuncio guardada = anuncioGuardado();
+
+        Usuario estudiante = usuarioConId(UUID.randomUUID());
+        Matricula matriculaAutor = matriculaDe(docente);
+        Matricula matriculaEstudiante = matriculaDe(estudiante);
+
+        stubCrearAnuncio(request, guardada, List.of(matriculaAutor, matriculaEstudiante));
+
+        anuncioService.crear(request);
+
+        verify(notificacionService, times(1)).crearBatch(argThat(lista ->
+                lista.size() == 1
+                        && lista.getFirst().usuarioId().equals(estudiante.getId())
+                        && lista.stream().noneMatch(n -> n.usuarioId().equals(docenteDuenoId))
+        ));
+        verify(notificacionService, never()).crear(any(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void crear_conVariosEstudiantes_llamaCrearBatchUnaVez() {
+        autenticarComo(docente);
+
+        CrearAnuncioRequest request = new CrearAnuncioRequest(cursoId, "Titulo", "Cuerpo");
+        Anuncio guardada = anuncioGuardado();
+
+        Usuario e1 = usuarioConId(UUID.randomUUID());
+        Usuario e2 = usuarioConId(UUID.randomUUID());
+        Usuario e3 = usuarioConId(UUID.randomUUID());
+
+        stubCrearAnuncio(request, guardada, List.of(matriculaDe(e1), matriculaDe(e2), matriculaDe(e3)));
+
+        anuncioService.crear(request);
+
+        verify(notificacionService, times(1)).crearBatch(argThat(lista ->
+                lista.size() == 3
+                        && lista.stream().map(NuevaNotificacion::usuarioId)
+                        .toList()
+                        .containsAll(List.of(e1.getId(), e2.getId(), e3.getId()))
+        ));
         verify(notificacionService, never()).crear(any(), any(), anyString(), any(), any());
     }
 

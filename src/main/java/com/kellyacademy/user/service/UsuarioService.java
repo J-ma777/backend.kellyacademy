@@ -32,11 +32,13 @@ import java.util.UUID;
 @Transactional
 public class UsuarioService {
 
+    private static final String RECURSO = "Usuario";
+    private static final String ROL_ADMIN = "ADMINISTRADOR";
+
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
     private final UsuarioMapper usuarioMapper;
     private final PasswordEncoder passwordEncoder;
-    private static final String RECURSO = "Usuario";
 
     @Transactional(readOnly = true)
     public Page<UsuarioResumenResponse> listar(Pageable pageable) {
@@ -103,8 +105,17 @@ public class UsuarioService {
             );
         }
 
-        Usuario usuario = usuarioRepository.findById(id)
+        // Cargamos con roles porque la proteccion del ultimo admin activo
+        // necesita inspeccionar el grafo de roles del objetivo.
+        Usuario usuario = usuarioRepository.findWithRolesById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+
+        // Un delete implica que el usuario deja de existir: nunca sera admin activo despues.
+        validarNoEsUltimoAdminActivo(
+                usuario,
+                false,
+                "No se puede eliminar al ultimo administrador activo del sistema."
+        );
 
         usuarioRepository.delete(usuario);
     }
@@ -130,6 +141,15 @@ public class UsuarioService {
             );
         }
 
+        // El usuario seguira siendo admin activo solo si el nuevo estado es ACTIVO.
+        // (Aunque tenga el rol ADMINISTRADOR, un estado distinto a ACTIVO lo desactiva.)
+        boolean seguiraSiendoAdminActivo = (nuevoEstado == EstadoUsuario.ACTIVO);
+        validarNoEsUltimoAdminActivo(
+                usuario,
+                seguiraSiendoAdminActivo,
+                "No se puede desactivar o bloquear al ultimo administrador activo del sistema."
+        );
+
         usuario.setEstado(nuevoEstado);
 
         return usuarioMapper.toResponse(usuario);
@@ -149,7 +169,18 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findWithRolesById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
+        // Resolvemos primero: si algun rol no existe, queremos ROL_INEXISTENTE
+        // antes que ULTIMO_ADMIN_ACTIVO (es un error de datos mas especifico).
         Set<Rol> roles = resolverRoles(nombresRoles);
+
+        // Tras el reemplazo total, seguira siendo admin activo solo si el nuevo
+        // set incluye ADMINISTRADOR y su estado actual ya es ACTIVO.
+        boolean seguiraSiendoAdminActivo = nombresRoles.contains(ROL_ADMIN);
+        validarNoEsUltimoAdminActivo(
+                usuario,
+                seguiraSiendoAdminActivo,
+                "No se puede quitar el rol ADMINISTRADOR al ultimo administrador activo del sistema."
+        );
 
         usuario.setRoles(roles);
 
@@ -188,6 +219,43 @@ public class UsuarioService {
         }
 
         usuario.setContrasena(passwordEncoder.encode(request.contrasenaNueva()));
+    }
+
+    // ------------------------------------------------------------------------
+    // PROTECCION DEL ULTIMO ADMIN ACTIVO (#70)
+    // ------------------------------------------------------------------------
+
+    // Un usuario es "admin activo" si tiene el rol ADMINISTRADOR y estado ACTIVO.
+    // Un admin INACTIVO o BLOQUEADO no cuenta como admin operativo.
+    private boolean esAdminActivo(Usuario usuario) {
+        if (usuario.getEstado() != EstadoUsuario.ACTIVO) {
+            return false;
+        }
+        Set<Rol> roles = usuario.getRoles();
+        if (roles == null || roles.isEmpty()) {
+            return false;
+        }
+        return roles.stream().anyMatch(r -> ROL_ADMIN.equals(r.getNombre()));
+    }
+
+    // Si el usuario es admin activo y la operacion lo dejaria sin esa condicion,
+    // valida que quede al menos otro admin activo en el sistema. Si es el ultimo,
+    // rechaza la operacion con ULTIMO_ADMIN_ACTIVO.
+    //
+    // Si el usuario no era admin activo, o si seguira siendo admin activo tras
+    // la operacion, no hay nada que validar.
+    private void validarNoEsUltimoAdminActivo(Usuario usuario,
+                                              boolean seguiraSiendoAdminActivo,
+                                              String mensaje) {
+        if (seguiraSiendoAdminActivo || !esAdminActivo(usuario)) {
+            return;
+        }
+        long adminsActivos = usuarioRepository.countByRolNombreAndEstado(
+                ROL_ADMIN, EstadoUsuario.ACTIVO
+        );
+        if (adminsActivos <= 1) {
+            throw new BusinessException("ULTIMO_ADMIN_ACTIVO", mensaje);
+        }
     }
 
     // Resuelve los nombres de roles del request a entidades. Falla si alguno no existe.

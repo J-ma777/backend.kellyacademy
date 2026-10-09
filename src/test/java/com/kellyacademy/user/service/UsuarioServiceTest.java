@@ -520,4 +520,220 @@ class UsuarioServiceTest {
         // No se hace save() explicito: dirty checking de JPA en @Transactional.
         verify(usuarioRepository, never()).save(any());
     }
+
+    // ------------------------------------------------------------------
+    // #70 - proteccion del ultimo admin activo
+    // ------------------------------------------------------------------
+
+    private Usuario usuarioConRol(UUID id, EstadoUsuario estado, String nombreRol) {
+        Rol rol = new Rol();
+        rol.setId(UUID.randomUUID());
+        rol.setNombre(nombreRol);
+
+        Usuario u = new Usuario();
+        u.setId(id);
+        u.setNombre("Test");
+        u.setApellido("User");
+        u.setCorreoElectronico("test@kelly.com");
+        u.setEstado(estado);
+        u.setRoles(Set.of(rol));
+        return u;
+    }
+
+    @Test
+    void cambiarEstado_ultimoAdminActivoAInactivo_lanzaUltimoAdminActivo() {
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = usuarioConRol(objetivoId, EstadoUsuario.ACTIVO, "ADMINISTRADOR");
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(usuarioRepository.countByRolNombreAndEstado("ADMINISTRADOR", EstadoUsuario.ACTIVO))
+                .thenReturn(1L);
+
+        assertThatThrownBy(() ->
+                usuarioService.cambiarEstado(objetivoId, EstadoUsuario.INACTIVO))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ULTIMO_ADMIN_ACTIVO");
+                    assertThat(ex.getMessage()).contains("ultimo administrador activo");
+                });
+
+        assertThat(objetivo.getEstado()).isEqualTo(EstadoUsuario.ACTIVO);
+    }
+
+    @Test
+    void cambiarEstado_ultimoAdminActivoABloqueado_lanzaUltimoAdminActivo() {
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = usuarioConRol(objetivoId, EstadoUsuario.ACTIVO, "ADMINISTRADOR");
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(usuarioRepository.countByRolNombreAndEstado("ADMINISTRADOR", EstadoUsuario.ACTIVO))
+                .thenReturn(1L);
+
+        assertThatThrownBy(() ->
+                usuarioService.cambiarEstado(objetivoId, EstadoUsuario.BLOQUEADO))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ULTIMO_ADMIN_ACTIVO");
+                });
+
+        assertThat(objetivo.getEstado()).isEqualTo(EstadoUsuario.ACTIVO);
+    }
+
+    @Test
+    void cambiarEstado_adminActivoConOtroAdminActivo_permite() {
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = usuarioConRol(objetivoId, EstadoUsuario.ACTIVO, "ADMINISTRADOR");
+
+        UsuarioResponse responseEsperado = new UsuarioResponse(
+                objetivoId, "Test", "User", "test@kelly.com",
+                null, EstadoUsuario.BLOQUEADO,
+                List.of("ADMINISTRADOR"), null, null
+        );
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(usuarioRepository.countByRolNombreAndEstado("ADMINISTRADOR", EstadoUsuario.ACTIVO))
+                .thenReturn(2L);
+        when(usuarioMapper.toResponse(objetivo)).thenReturn(responseEsperado);
+
+        UsuarioResponse resultado = usuarioService.cambiarEstado(
+                objetivoId, EstadoUsuario.BLOQUEADO);
+
+        assertThat(resultado.estado()).isEqualTo(EstadoUsuario.BLOQUEADO);
+        assertThat(objetivo.getEstado()).isEqualTo(EstadoUsuario.BLOQUEADO);
+    }
+
+    @Test
+    void cambiarEstado_adminInactivoAInactivo_noAplicaProteccion() {
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = usuarioConRol(objetivoId, EstadoUsuario.INACTIVO, "ADMINISTRADOR");
+
+        UsuarioResponse responseEsperado = new UsuarioResponse(
+                objetivoId, "Test", "User", "test@kelly.com",
+                null, EstadoUsuario.BLOQUEADO,
+                List.of("ADMINISTRADOR"), null, null
+        );
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(usuarioMapper.toResponse(objetivo)).thenReturn(responseEsperado);
+
+        UsuarioResponse resultado = usuarioService.cambiarEstado(
+                objetivoId, EstadoUsuario.BLOQUEADO);
+
+        assertThat(resultado.estado()).isEqualTo(EstadoUsuario.BLOQUEADO);
+        // No se consulto el conteo: el usuario no era admin activo antes.
+        verify(usuarioRepository, never())
+                .countByRolNombreAndEstado(any(), any());
+    }
+
+    @Test
+    void asignarRoles_quitarAdminAlUltimo_lanzaUltimoAdminActivo() {
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = usuarioConRol(objetivoId, EstadoUsuario.ACTIVO, "ADMINISTRADOR");
+
+        Rol rolEstudiante = new Rol();
+        rolEstudiante.setId(UUID.randomUUID());
+        rolEstudiante.setNombre("ESTUDIANTE");
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(rolRepository.findByNombre("ESTUDIANTE")).thenReturn(Optional.of(rolEstudiante));
+        when(usuarioRepository.countByRolNombreAndEstado("ADMINISTRADOR", EstadoUsuario.ACTIVO))
+                .thenReturn(1L);
+
+        assertThatThrownBy(() ->
+                usuarioService.asignarRoles(objetivoId, Set.of("ESTUDIANTE")))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ULTIMO_ADMIN_ACTIVO");
+                    assertThat(ex.getMessage()).contains("quitar el rol ADMINISTRADOR");
+                });
+
+        // Los roles del objetivo no cambiaron.
+        assertThat(objetivo.getRoles().iterator().next().getNombre()).isEqualTo("ADMINISTRADOR");
+    }
+
+    @Test
+    void asignarRoles_mantenerAdmin_permiteAunqueSeaUnico() {
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = usuarioConRol(objetivoId, EstadoUsuario.ACTIVO, "ADMINISTRADOR");
+
+        Rol rolDocente = new Rol();
+        rolDocente.setId(UUID.randomUUID());
+        rolDocente.setNombre("DOCENTE");
+
+        Rol rolAdmin = new Rol();
+        rolAdmin.setId(UUID.randomUUID());
+        rolAdmin.setNombre("ADMINISTRADOR");
+
+        UsuarioResponse responseEsperado = new UsuarioResponse(
+                objetivoId, "Test", "User", "test@kelly.com",
+                null, EstadoUsuario.ACTIVO,
+                List.of("ADMINISTRADOR", "DOCENTE"), null, null
+        );
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(rolRepository.findByNombre("DOCENTE")).thenReturn(Optional.of(rolDocente));
+        when(rolRepository.findByNombre("ADMINISTRADOR")).thenReturn(Optional.of(rolAdmin));
+        when(usuarioMapper.toResponse(objetivo)).thenReturn(responseEsperado);
+
+        UsuarioResponse resultado = usuarioService.asignarRoles(
+                objetivoId, Set.of("ADMINISTRADOR", "DOCENTE"));
+
+        assertThat(resultado.roles()).containsExactlyInAnyOrder("ADMINISTRADOR", "DOCENTE");
+        // No se consulto el conteo: el nuevo set conserva ADMINISTRADOR.
+        verify(usuarioRepository, never())
+                .countByRolNombreAndEstado(any(), any());
+    }
+
+    @Test
+    void eliminar_ultimoAdminActivo_lanzaUltimoAdminActivo() {
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = usuarioConRol(objetivoId, EstadoUsuario.ACTIVO, "ADMINISTRADOR");
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(usuarioRepository.countByRolNombreAndEstado("ADMINISTRADOR", EstadoUsuario.ACTIVO))
+                .thenReturn(1L);
+
+        assertThatThrownBy(() -> usuarioService.eliminar(objetivoId))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ULTIMO_ADMIN_ACTIVO");
+                    assertThat(ex.getMessage()).contains("eliminar");
+                });
+
+        verify(usuarioRepository, never()).delete(any());
+    }
+
+    @Test
+    void eliminar_adminConOtroAdminActivo_permite() {
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = usuarioConRol(objetivoId, EstadoUsuario.ACTIVO, "ADMINISTRADOR");
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(usuarioRepository.countByRolNombreAndEstado("ADMINISTRADOR", EstadoUsuario.ACTIVO))
+                .thenReturn(2L);
+
+        usuarioService.eliminar(objetivoId);
+
+        verify(usuarioRepository).delete(objetivo);
+    }
 }

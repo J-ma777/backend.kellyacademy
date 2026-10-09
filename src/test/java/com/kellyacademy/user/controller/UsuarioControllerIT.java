@@ -322,4 +322,84 @@ class UsuarioControllerIT extends IntegrationTestBase {
         );
         assertThat(resp.getStatusCode().value()).isEqualTo(401);
     }
+
+    // ------------------------------------------------------------------
+    // #70 - proteccion del ultimo admin activo
+    // ------------------------------------------------------------------
+
+    private String crearSegundoAdminYLogin(String correo) {
+        CrearUsuarioRequest req = new CrearUsuarioRequest(
+                "Admin", "Secundario", correo,
+                PASSWORD, null, Set.of("ADMINISTRADOR")
+        );
+        ResponseEntity<UsuarioResponse> resp = post("/api/usuarios", adminToken, req, UsuarioResponse.class);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return login(correo, PASSWORD);
+    }
+
+    @Test
+    void cambiarEstado_conDosAdminsActivos_permiteDesactivarAUno() {
+        String segundoAdminEmail = "admin2.estado.it@kellyacademy.com";
+        // Creamos segundo admin (admin base sigue autenticado).
+        CrearUsuarioRequest req = new CrearUsuarioRequest(
+                "Admin", "Secundario", segundoAdminEmail,
+                PASSWORD, null, Set.of("ADMINISTRADOR")
+        );
+        ResponseEntity<UsuarioResponse> creado = post("/api/usuarios", adminToken, req, UsuarioResponse.class);
+        assertThat(creado.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        UUID segundoAdminId = Objects.requireNonNull(creado.getBody()).id();
+
+        // Con 2 admins activos, desactivar al segundo debe permitirse.
+        CambiarEstadoUsuarioRequest estadoReq = new CambiarEstadoUsuarioRequest(EstadoUsuario.BLOQUEADO);
+        ResponseEntity<UsuarioResponse> resp = rest.exchange(
+                "/api/usuarios/" + segundoAdminId + "/estado",
+                HttpMethod.PATCH,
+                new HttpEntity<>(estadoReq, headersConToken(adminToken)),
+                UsuarioResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).estado()).isEqualTo(EstadoUsuario.BLOQUEADO);
+    }
+
+    @Test
+    void asignarRoles_conDosAdminsActivos_permiteQuitarAdminAUno() {
+        String segundoAdminEmail = "admin3.estado.it@kellyacademy.com";
+        CrearUsuarioRequest req = new CrearUsuarioRequest(
+                "Admin", "Terciario", segundoAdminEmail,
+                PASSWORD, null, Set.of("ADMINISTRADOR")
+        );
+        ResponseEntity<UsuarioResponse> creado = post("/api/usuarios", adminToken, req, UsuarioResponse.class);
+        assertThat(creado.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        UUID segundoAdminId = Objects.requireNonNull(creado.getBody()).id();
+
+        // Con 2 admins activos, quitarle ADMINISTRADOR al segundo debe permitirse.
+        AsignarRolesUsuarioRequest rolesReq = new AsignarRolesUsuarioRequest(Set.of("ESTUDIANTE"));
+        ResponseEntity<UsuarioResponse> resp = rest.exchange(
+                "/api/usuarios/" + segundoAdminId + "/roles",
+                HttpMethod.PUT,
+                new HttpEntity<>(rolesReq, headersConToken(adminToken)),
+                UsuarioResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).roles()).containsExactly("ESTUDIANTE");
+    }
+
+    @Test
+    void eliminar_conDosAdminsActivos_permiteEliminarAUno() {
+        String segundoAdminEmail = "admin4.estado.it@kellyacademy.com";
+        CrearUsuarioRequest req = new CrearUsuarioRequest(
+                "Admin", "Cuaternario", segundoAdminEmail,
+                PASSWORD, null, Set.of("ADMINISTRADOR")
+        );
+        ResponseEntity<UsuarioResponse> creado = post("/api/usuarios", adminToken, req, UsuarioResponse.class);
+        assertThat(creado.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        UUID segundoAdminId = Objects.requireNonNull(creado.getBody()).id();
+
+        // Con 2 admins activos, eliminar al segundo debe permitirse.
+        ResponseEntity<Void> resp = delete("/api/usuarios/" + segundoAdminId, adminToken);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
 }

@@ -32,6 +32,18 @@ public interface AsistenciaRepository extends
 
     long countByEstudianteId(UUID estudianteId);
 
+    @Query("""
+        SELECT COUNT(a) FROM Asistencia a
+        WHERE a.clase.semana.unidad.curso.id = :cursoId
+          AND a.estudiante.id = :estudianteId
+          AND a.estado = :estado
+    """)
+    long contarPorCursoEstudianteYEstado(
+            @Param("cursoId") UUID cursoId,
+            @Param("estudianteId") UUID estudianteId,
+            @Param("estado") EstadoAsistencia estado
+    );
+
     // Carga clase (con su jerarquia hasta docente) y estudiante en la misma query.
     // Necesario para que AsistenciaMapper.toResponse lea los escalares sin disparar
     // SELECTs adicionales (open-in-view=false + @ManyToOne LAZY).

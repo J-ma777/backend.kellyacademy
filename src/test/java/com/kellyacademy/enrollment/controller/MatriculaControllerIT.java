@@ -370,4 +370,59 @@ class MatriculaControllerIT extends IntegrationTestBase {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
+
+    @Test
+    void recalcular_comoAdmin_devuelve200() {
+        UUID matriculaId = crearMatriculaActiva();
+
+        ResponseEntity<MatriculaResponse> resp = post(
+                "/api/matriculas/" + matriculaId + "/recalcular",
+                adminToken,
+                null,
+                MatriculaResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).id()).isEqualTo(matriculaId);
+    }
+
+    @Test
+    void recalcular_comoDocente_devuelve403() {
+        UUID matriculaId = crearMatriculaActiva();
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/matriculas/" + matriculaId + "/recalcular",
+                docenteDuenoToken,
+                null,
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void recalcular_comoEstudiante_devuelve403() {
+        UUID matriculaId = crearMatriculaActiva();
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/matriculas/" + matriculaId + "/recalcular",
+                estudianteToken,
+                null,
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void recalcular_idInexistente_devuelve404() {
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/matriculas/" + UUID.randomUUID() + "/recalcular",
+                adminToken,
+                null,
+                ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
 }

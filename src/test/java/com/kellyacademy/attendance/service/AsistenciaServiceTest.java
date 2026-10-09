@@ -1,5 +1,6 @@
 package com.kellyacademy.attendance.service;
 
+import com.kellyacademy.attendance.dto.request.ActualizarAsistenciaRequest;
 import com.kellyacademy.attendance.dto.request.CrearAsistenciaRequest;
 import com.kellyacademy.attendance.dto.response.AsistenciaResponse;
 import com.kellyacademy.attendance.entity.Asistencia;
@@ -11,7 +12,9 @@ import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.entity.Semana;
 import com.kellyacademy.course.entity.Unidad;
 import com.kellyacademy.course.repository.ClaseRepository;
+import com.kellyacademy.enrollment.entity.Matricula;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
+import com.kellyacademy.enrollment.service.CalculoMatriculaService;
 import com.kellyacademy.security.user.CustomUserDetails;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
@@ -46,6 +49,7 @@ class AsistenciaServiceTest {
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private MatriculaRepository matriculaRepository;
     @Mock private AsistenciaMapper asistenciaMapper;
+    @Mock private CalculoMatriculaService calculoMatriculaService;
 
     @InjectMocks private AsistenciaService asistenciaService;
 
@@ -121,10 +125,14 @@ class AsistenciaServiceTest {
         Asistencia guardada = new Asistencia();
         guardada.setId(UUID.randomUUID());
 
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
         when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
         when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(true);
         when(asistenciaRepository.findByClaseIdAndEstudianteId(claseId, estudianteId)).thenReturn(Optional.empty());
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
         when(asistenciaMapper.toEntity(request)).thenReturn(new Asistencia());
         when(asistenciaRepository.save(any(Asistencia.class))).thenReturn(guardada);
         when(asistenciaMapper.toResponse(guardada)).thenReturn(mock(AsistenciaResponse.class));
@@ -133,6 +141,55 @@ class AsistenciaServiceTest {
 
         assertThat(response).isNotNull();
         verify(asistenciaRepository).save(any(Asistencia.class));
+        verify(calculoMatriculaService).recalcular(matriculaMock.getId());
+    }
+
+    @Test
+    void actualizar_cuandoTodoValido_llamaRecalcular() {
+        autenticarComo(docente);
+
+        UUID asistenciaId = UUID.randomUUID();
+        Asistencia asistencia = new Asistencia();
+        asistencia.setId(asistenciaId);
+        asistencia.setClase(clase);
+        asistencia.setEstudiante(estudiante);
+        asistencia.setEstado(EstadoAsistencia.AUSENTE);
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        ActualizarAsistenciaRequest request = new ActualizarAsistenciaRequest(
+                EstadoAsistencia.PRESENTE, "Llego justificado luego"
+        );
+
+        when(asistenciaRepository.findWithClaseAndEstudianteById(asistenciaId)).thenReturn(Optional.of(asistencia));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
+        when(asistenciaMapper.toResponse(asistencia)).thenReturn(mock(AsistenciaResponse.class));
+
+        AsistenciaResponse response = asistenciaService.actualizar(asistenciaId, request);
+
+        assertThat(response).isNotNull();
+        verify(calculoMatriculaService).recalcular(matriculaMock.getId());
+    }
+
+    @Test
+    void eliminar_cuandoExiste_llamaRecalcular() {
+        UUID asistenciaId = UUID.randomUUID();
+        Asistencia asistencia = new Asistencia();
+        asistencia.setId(asistenciaId);
+        asistencia.setClase(clase);
+        asistencia.setEstudiante(estudiante);
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        when(asistenciaRepository.findWithClaseAndEstudianteById(asistenciaId)).thenReturn(Optional.of(asistencia));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
+
+        asistenciaService.eliminar(asistenciaId);
+
+        verify(asistenciaRepository).delete(asistencia);
+        verify(calculoMatriculaService).recalcular(matriculaMock.getId());
     }
 
     @Test

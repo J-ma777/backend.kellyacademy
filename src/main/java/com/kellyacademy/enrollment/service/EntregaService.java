@@ -50,6 +50,7 @@ public class EntregaService {
     private final UsuarioRepository usuarioRepository;
     private final MatriculaRepository matriculaRepository;
     private final EntregaMapper entregaMapper;
+    private final CalculoMatriculaService calculoMatriculaService;
 
     // Listado administrativo. Si el autenticado es DOCENTE, se filtra a sus cursos.
     // Si es ADMIN, ve todas.
@@ -161,6 +162,11 @@ public class EntregaService {
         entrega.setNota(request.nota());
         entrega.setRetroalimentacion(request.retroalimentacion());
         entrega.setEstado(EstadoEntrega.CALIFICADA);
+
+        UUID cursoId = entrega.getTarea().getSemana().getUnidad().getCurso().getId();
+        UUID estudianteId = entrega.getEstudiante().getId();
+        matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)
+                .ifPresent(matricula -> calculoMatriculaService.recalcular(matricula.getId()));
 
         return entregaMapper.toResponse(entrega);
     }

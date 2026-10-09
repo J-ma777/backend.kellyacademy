@@ -10,6 +10,7 @@ import com.kellyacademy.enrollment.dto.request.CalificarEntregaRequest;
 import com.kellyacademy.enrollment.dto.request.CrearEntregaRequest;
 import com.kellyacademy.enrollment.dto.response.EntregaResponse;
 import com.kellyacademy.enrollment.entity.Entrega;
+import com.kellyacademy.enrollment.entity.Matricula;
 import com.kellyacademy.enrollment.enums.EstadoEntrega;
 import com.kellyacademy.enrollment.mapper.EntregaMapper;
 import com.kellyacademy.enrollment.repository.EntregaRepository;
@@ -50,6 +51,7 @@ class EntregaServiceTest {
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private MatriculaRepository matriculaRepository;
     @Mock private EntregaMapper entregaMapper;
+    @Mock private CalculoMatriculaService calculoMatriculaService;
 
     @InjectMocks private EntregaService entregaService;
 
@@ -294,8 +296,13 @@ class EntregaServiceTest {
                 new BigDecimal("85.50"), "Buen trabajo"
         );
 
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
         when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
                 .thenReturn(Optional.of(entrega));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId))
+                .thenReturn(Optional.of(matriculaMock));
         when(entregaMapper.toResponse(entrega)).thenReturn(mock(EntregaResponse.class));
 
         EntregaResponse response = entregaService.calificar(entrega.getId(), request);
@@ -304,6 +311,7 @@ class EntregaServiceTest {
         assertThat(entrega.getNota()).isEqualByComparingTo("85.50");
         assertThat(entrega.getRetroalimentacion()).isEqualTo("Buen trabajo");
         assertThat(entrega.getEstado()).isEqualTo(EstadoEntrega.CALIFICADA);
+        verify(calculoMatriculaService).recalcular(matriculaMock.getId());
     }
 
     @Test

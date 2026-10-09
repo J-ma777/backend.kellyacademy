@@ -126,7 +126,7 @@ public class NotificacionService {
                                       String cuerpo,
                                       String link) {
         return crearBatch(List.of(new NuevaNotificacion(usuarioId, tipo, titulo, cuerpo, link)))
-                .getFirst();
+                .get(0);
     }
 
     public List<NotificacionResponse> crearBatch(List<NuevaNotificacion> destinatarios) {

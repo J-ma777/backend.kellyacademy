@@ -3,9 +3,11 @@ package com.kellyacademy.calendar.service;
 import com.kellyacademy.calendar.dto.request.ActualizarTutoriaRequest;
 import com.kellyacademy.calendar.dto.request.CrearTutoriaRequest;
 import com.kellyacademy.calendar.dto.response.TutoriaResponse;
+import com.kellyacademy.calendar.entity.DisponibilidadTutoria;
 import com.kellyacademy.calendar.entity.Tutoria;
 import com.kellyacademy.calendar.enums.EstadoTutoria;
 import com.kellyacademy.calendar.mapper.TutoriaMapper;
+import com.kellyacademy.calendar.repository.DisponibilidadTutoriaRepository;
 import com.kellyacademy.calendar.repository.TutoriaRepository;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.repository.CursoRepository;
@@ -29,7 +31,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -37,12 +42,14 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class TutoriaServiceTest {
 
     @Mock private TutoriaRepository tutoriaRepository;
+    @Mock private DisponibilidadTutoriaRepository disponibilidadTutoriaRepository;
     @Mock private TutoriaMapper tutoriaMapper;
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private CursoRepository cursoRepository;
@@ -93,16 +100,35 @@ class TutoriaServiceTest {
         return new CrearTutoriaRequest(estudianteId, docenteId, cursoId, fecha, 60);
     }
 
+    private DisponibilidadTutoria bloqueValido(DayOfWeek diaSemana, LocalTime inicio, LocalTime fin, boolean bloqueada) {
+        DisponibilidadTutoria d = new DisponibilidadTutoria();
+        d.setId(UUID.randomUUID());
+        d.setDocente(docente);
+        d.setDiaSemana(diaSemana);
+        d.setHoraInicio(inicio);
+        d.setHoraFin(fin);
+        d.setBloqueada(bloqueada);
+        return d;
+    }
+
+    private void mockDisponibilidadValidaYNoSolape() {
+        when(disponibilidadTutoriaRepository.findByDocenteIdAndDiaSemana(any(), any()))
+                .thenReturn(List.of(bloqueValido(DayOfWeek.MONDAY, LocalTime.MIN, LocalTime.MAX, false)));
+        when(tutoriaRepository.findConfirmadasCandidatasSolape(any(), any(), any(), any(), any()))
+                .thenReturn(List.of());
+    }
+
     // -------- crear --------
 
     @Test
     void crear_comoEstudiante_sinCurso_ok() {
         autenticarComo(estudiante);
 
-        CrearTutoriaRequest req = requestValido(null, LocalDateTime.now().plusDays(1));
+        CrearTutoriaRequest req = requestValido(null, LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
 
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
         when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
+        mockDisponibilidadValidaYNoSolape();
         when(tutoriaMapper.toEntity(req)).thenReturn(new Tutoria());
         when(tutoriaRepository.save(any(Tutoria.class))).thenAnswer(inv -> {
             Tutoria t = inv.getArgument(0);
@@ -122,10 +148,11 @@ class TutoriaServiceTest {
     void crear_comoDocente_sinCurso_ok() {
         autenticarComo(docente);
 
-        CrearTutoriaRequest req = requestValido(null, LocalDateTime.now().plusDays(1));
+        CrearTutoriaRequest req = requestValido(null, LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
 
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
         when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
+        mockDisponibilidadValidaYNoSolape();
         when(tutoriaMapper.toEntity(req)).thenReturn(new Tutoria());
         when(tutoriaRepository.save(any(Tutoria.class))).thenAnswer(inv -> {
             Tutoria t = inv.getArgument(0);
@@ -148,7 +175,7 @@ class TutoriaServiceTest {
         tercero.setRoles(Set.of());
         autenticarComo(tercero);
 
-        CrearTutoriaRequest req = requestValido(null, LocalDateTime.now().plusDays(1));
+        CrearTutoriaRequest req = requestValido(null, LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
 
         assertThatThrownBy(() -> tutoriaService.crear(req))
                 .isInstanceOf(AccessDeniedException.class);
@@ -174,7 +201,7 @@ class TutoriaServiceTest {
         autenticarComo(docente);
 
         estudiante.setRoles(Set.of());
-        CrearTutoriaRequest req = requestValido(null, LocalDateTime.now().plusDays(1));
+        CrearTutoriaRequest req = requestValido(null, LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
 
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
 
@@ -194,7 +221,7 @@ class TutoriaServiceTest {
         otroDocente.setId(UUID.randomUUID());
         curso.setDocente(otroDocente);
 
-        CrearTutoriaRequest req = requestValido(cursoId, LocalDateTime.now().plusDays(1));
+        CrearTutoriaRequest req = requestValido(cursoId, LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
 
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
         when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
@@ -214,7 +241,7 @@ class TutoriaServiceTest {
         curso.setId(cursoId);
         curso.setDocente(docente);
 
-        CrearTutoriaRequest req = requestValido(cursoId, LocalDateTime.now().plusDays(1));
+        CrearTutoriaRequest req = requestValido(cursoId, LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
 
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
         when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
@@ -239,13 +266,14 @@ class TutoriaServiceTest {
         Matricula m = new Matricula();
         m.setEstado(EstadoMatricula.ACTIVA);
 
-        CrearTutoriaRequest req = requestValido(cursoId, LocalDateTime.now().plusDays(1));
+        CrearTutoriaRequest req = requestValido(cursoId, LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
 
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
         when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
         when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
         when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId))
                 .thenReturn(Optional.of(m));
+        mockDisponibilidadValidaYNoSolape();
         when(tutoriaMapper.toEntity(req)).thenReturn(new Tutoria());
         when(tutoriaRepository.save(any(Tutoria.class))).thenAnswer(inv -> {
             Tutoria t = inv.getArgument(0);
@@ -254,6 +282,215 @@ class TutoriaServiceTest {
         });
         when(tutoriaRepository.findWithEstudianteDocenteCursoById(any()))
                 .thenAnswer(inv -> Optional.of(new Tutoria()));
+        when(tutoriaMapper.toResponse(any(Tutoria.class))).thenReturn(mock(TutoriaResponse.class));
+
+        tutoriaService.crear(req);
+
+        verify(tutoriaRepository).save(any(Tutoria.class));
+    }
+
+    // -------- tests #47 + #48 en crear --------
+
+    @Test
+    void crear_cuandoDocenteSinDisponibilidad_lanzaBusinessException() {
+        autenticarComo(estudiante);
+        LocalDateTime fecha = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        CrearTutoriaRequest req = requestValido(null, fecha);
+
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
+        when(disponibilidadTutoriaRepository.findByDocenteIdAndDiaSemana(eq(docenteId), eq(fecha.getDayOfWeek())))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> tutoriaService.crear(req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("disponibilidad");
+
+        verify(tutoriaRepository, never()).save(any());
+    }
+
+    @Test
+    void crear_cuandoBloqueBloqueado_lanzaBusinessException() {
+        autenticarComo(estudiante);
+        LocalDateTime fecha = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        CrearTutoriaRequest req = requestValido(null, fecha);
+
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
+        when(disponibilidadTutoriaRepository.findByDocenteIdAndDiaSemana(eq(docenteId), eq(fecha.getDayOfWeek())))
+                .thenReturn(List.of(bloqueValido(fecha.getDayOfWeek(), LocalTime.of(8, 0), LocalTime.of(12, 0), true)));
+
+        assertThatThrownBy(() -> tutoriaService.crear(req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("bloquead");
+
+        verify(tutoriaRepository, never()).save(any());
+    }
+
+    @Test
+    void crear_cuandoBloqueValidoNoBloqueado_ok() {
+        autenticarComo(estudiante);
+        LocalDateTime fecha = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        CrearTutoriaRequest req = requestValido(null, fecha);
+
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
+        DisponibilidadTutoria bloqueBloqueado = bloqueValido(fecha.getDayOfWeek(), LocalTime.of(9, 0), LocalTime.of(12, 0), true);
+        DisponibilidadTutoria bloqueDisponible = bloqueValido(fecha.getDayOfWeek(), LocalTime.of(8, 0), LocalTime.of(13, 0), false);
+        when(disponibilidadTutoriaRepository.findByDocenteIdAndDiaSemana(eq(docenteId), eq(fecha.getDayOfWeek())))
+                .thenReturn(List.of(bloqueBloqueado, bloqueDisponible));
+        when(tutoriaRepository.findConfirmadasCandidatasSolape(any(), any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(tutoriaMapper.toEntity(req)).thenReturn(new Tutoria());
+        when(tutoriaRepository.save(any(Tutoria.class))).thenAnswer(inv -> {
+            Tutoria t = inv.getArgument(0);
+            t.setId(UUID.randomUUID());
+            return t;
+        });
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(any()))
+                .thenReturn(Optional.of(new Tutoria()));
+        when(tutoriaMapper.toResponse(any(Tutoria.class))).thenReturn(mock(TutoriaResponse.class));
+
+        tutoriaService.crear(req);
+
+        verify(tutoriaRepository).save(any(Tutoria.class));
+    }
+
+    @Test
+    void crear_cuandoCruzaMedianoche_lanzaBusinessException() {
+        autenticarComo(estudiante);
+        LocalDateTime fecha = LocalDateTime.now().plusDays(1).withHour(23).withMinute(30);
+        CrearTutoriaRequest req = new CrearTutoriaRequest(estudianteId, docenteId, null, fecha, 60);
+
+        assertThatThrownBy(() -> tutoriaService.crear(req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("medianoche");
+
+        verifyNoInteractions(disponibilidadTutoriaRepository, tutoriaRepository);
+    }
+
+    @Test
+    void crear_cuandoSolapeConConfirmadaDelDocente_lanzaBusinessException() {
+        autenticarComo(estudiante);
+        LocalDateTime fecha = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        CrearTutoriaRequest req = requestValido(null, fecha);
+
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
+        when(disponibilidadTutoriaRepository.findByDocenteIdAndDiaSemana(eq(docenteId), eq(fecha.getDayOfWeek())))
+                .thenReturn(List.of(bloqueValido(fecha.getDayOfWeek(), LocalTime.of(8, 0), LocalTime.of(12, 0), false)));
+
+        Tutoria confDocente = new Tutoria();
+        confDocente.setId(UUID.randomUUID());
+        confDocente.setDocente(docente);
+        confDocente.setEstudiante(new Usuario());
+        confDocente.setFecha(fecha.plusMinutes(30)); // 10:30 a 11:30 solapa con 10:00 a 11:00
+        confDocente.setDuracionMinutos(60);
+        confDocente.setEstado(EstadoTutoria.CONFIRMADA);
+
+        when(tutoriaRepository.findConfirmadasCandidatasSolape(eq(docenteId), eq(estudianteId), any(), any(), isNull()))
+                .thenReturn(List.of(confDocente));
+
+        assertThatThrownBy(() -> tutoriaService.crear(req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("solapa");
+
+        verify(tutoriaRepository, never()).save(any());
+    }
+
+    @Test
+    void crear_cuandoSolapeConConfirmadaDelEstudiante_lanzaBusinessException() {
+        autenticarComo(estudiante);
+        LocalDateTime fecha = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        CrearTutoriaRequest req = requestValido(null, fecha);
+
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
+        when(disponibilidadTutoriaRepository.findByDocenteIdAndDiaSemana(eq(docenteId), eq(fecha.getDayOfWeek())))
+                .thenReturn(List.of(bloqueValido(fecha.getDayOfWeek(), LocalTime.of(8, 0), LocalTime.of(12, 0), false)));
+
+        Tutoria confEstudiante = new Tutoria();
+        confEstudiante.setId(UUID.randomUUID());
+        confEstudiante.setDocente(new Usuario());
+        confEstudiante.setEstudiante(estudiante);
+        confEstudiante.setFecha(fecha.minusMinutes(30)); // 09:30 a 10:30 solapa con 10:00 a 11:00
+        confEstudiante.setDuracionMinutos(60);
+        confEstudiante.setEstado(EstadoTutoria.CONFIRMADA);
+
+        when(tutoriaRepository.findConfirmadasCandidatasSolape(eq(docenteId), eq(estudianteId), any(), any(), isNull()))
+                .thenReturn(List.of(confEstudiante));
+
+        assertThatThrownBy(() -> tutoriaService.crear(req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("solapa");
+
+        verify(tutoriaRepository, never()).save(any());
+    }
+
+    @Test
+    void crear_cuandoOtraTutoriaEsPendiente_noFalla() {
+        autenticarComo(estudiante);
+        LocalDateTime fecha = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        CrearTutoriaRequest req = requestValido(null, fecha);
+
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
+        when(disponibilidadTutoriaRepository.findByDocenteIdAndDiaSemana(eq(docenteId), eq(fecha.getDayOfWeek())))
+                .thenReturn(List.of(bloqueValido(fecha.getDayOfWeek(), LocalTime.of(8, 0), LocalTime.of(12, 0), false)));
+        when(tutoriaRepository.findConfirmadasCandidatasSolape(any(), any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(tutoriaMapper.toEntity(req)).thenReturn(new Tutoria());
+        when(tutoriaRepository.save(any(Tutoria.class))).thenAnswer(inv -> {
+            Tutoria t = inv.getArgument(0);
+            t.setId(UUID.randomUUID());
+            return t;
+        });
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(any()))
+                .thenReturn(Optional.of(new Tutoria()));
+        when(tutoriaMapper.toResponse(any(Tutoria.class))).thenReturn(mock(TutoriaResponse.class));
+
+        tutoriaService.crear(req);
+
+        verify(tutoriaRepository).save(any(Tutoria.class));
+    }
+
+    @Test
+    void crear_cuandoTutoriaAdyacente_noFalla() {
+        autenticarComo(estudiante);
+        LocalDateTime fecha = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        CrearTutoriaRequest req = requestValido(null, fecha); // 10:00 a 11:00
+
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
+        when(disponibilidadTutoriaRepository.findByDocenteIdAndDiaSemana(eq(docenteId), eq(fecha.getDayOfWeek())))
+                .thenReturn(List.of(bloqueValido(fecha.getDayOfWeek(), LocalTime.of(8, 0), LocalTime.of(13, 0), false)));
+
+        Tutoria anterior = new Tutoria();
+        anterior.setId(UUID.randomUUID());
+        anterior.setDocente(docente);
+        anterior.setEstudiante(new Usuario());
+        anterior.setFecha(fecha.minusMinutes(60)); // 09:00 a 10:00 (termina exactamente cuando empieza la nueva)
+        anterior.setDuracionMinutos(60);
+        anterior.setEstado(EstadoTutoria.CONFIRMADA);
+
+        Tutoria posterior = new Tutoria();
+        posterior.setId(UUID.randomUUID());
+        posterior.setDocente(docente);
+        posterior.setEstudiante(new Usuario());
+        posterior.setFecha(fecha.plusMinutes(60)); // 11:00 a 12:00 (empieza exactamente cuando termina la nueva)
+        posterior.setDuracionMinutos(60);
+        posterior.setEstado(EstadoTutoria.CONFIRMADA);
+
+        when(tutoriaRepository.findConfirmadasCandidatasSolape(any(), any(), any(), any(), any()))
+                .thenReturn(List.of(anterior, posterior));
+        when(tutoriaMapper.toEntity(req)).thenReturn(new Tutoria());
+        when(tutoriaRepository.save(any(Tutoria.class))).thenAnswer(inv -> {
+            Tutoria t = inv.getArgument(0);
+            t.setId(UUID.randomUUID());
+            return t;
+        });
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(any()))
+                .thenReturn(Optional.of(new Tutoria()));
         when(tutoriaMapper.toResponse(any(Tutoria.class))).thenReturn(mock(TutoriaResponse.class));
 
         tutoriaService.crear(req);
@@ -304,15 +541,17 @@ class TutoriaServiceTest {
         t.setEstudiante(estudiante);
         t.setDocente(docente);
         t.setEstado(EstadoTutoria.PENDIENTE);
-        t.setFecha(LocalDateTime.now().plusDays(1));
+        t.setFecha(LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
         t.setDuracionMinutos(60);
 
+        LocalDateTime nuevaFecha = LocalDateTime.now().plusDays(2).withHour(11).withMinute(0);
         ActualizarTutoriaRequest req = new ActualizarTutoriaRequest(
-                LocalDateTime.now().plusDays(2), 90, "nueva nota"
+                nuevaFecha, 90, "nueva nota"
         );
 
         when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
                 .thenReturn(Optional.of(t));
+        mockDisponibilidadValidaYNoSolape();
         when(tutoriaRepository.save(t)).thenReturn(t);
         when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
                 .thenReturn(Optional.of(t));
@@ -324,6 +563,63 @@ class TutoriaServiceTest {
     }
 
     @Test
+    void actualizar_cuandoSoloCambiaNotas_noRevalida() {
+        autenticarComo(estudiante);
+
+        LocalDateTime fechaFija = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        Tutoria t = new Tutoria();
+        t.setId(UUID.randomUUID());
+        t.setEstudiante(estudiante);
+        t.setDocente(docente);
+        t.setEstado(EstadoTutoria.PENDIENTE);
+        t.setFecha(fechaFija);
+        t.setDuracionMinutos(60);
+
+        ActualizarTutoriaRequest req = new ActualizarTutoriaRequest(fechaFija, 60, "nueva nota");
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaRepository.save(t)).thenReturn(t);
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaMapper.toResponse(t)).thenReturn(mock(TutoriaResponse.class));
+
+        tutoriaService.actualizar(t.getId(), req);
+
+        verify(disponibilidadTutoriaRepository, never()).findByDocenteIdAndDiaSemana(any(), any());
+        verify(tutoriaRepository, never()).findConfirmadasCandidatasSolape(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void actualizar_cuandoCambiaFecha_revalidaDisponibilidad() {
+        autenticarComo(estudiante);
+
+        LocalDateTime fechaOriginal = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        LocalDateTime fechaNueva = LocalDateTime.now().plusDays(2).withHour(14).withMinute(0);
+
+        Tutoria t = new Tutoria();
+        t.setId(UUID.randomUUID());
+        t.setEstudiante(estudiante);
+        t.setDocente(docente);
+        t.setEstado(EstadoTutoria.PENDIENTE);
+        t.setFecha(fechaOriginal);
+        t.setDuracionMinutos(60);
+
+        ActualizarTutoriaRequest req = new ActualizarTutoriaRequest(fechaNueva, 60, null);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(disponibilidadTutoriaRepository.findByDocenteIdAndDiaSemana(eq(docenteId), eq(fechaNueva.getDayOfWeek())))
+                .thenReturn(List.of()); // Sin disponibilidad en fechaNueva
+
+        assertThatThrownBy(() -> tutoriaService.actualizar(t.getId(), req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("disponibilidad");
+
+        verify(tutoriaRepository, never()).save(any());
+    }
+
+    @Test
     void actualizar_confirmada_cambiaFecha_lanzaBusinessException() {
         autenticarComo(estudiante);
 
@@ -332,11 +628,11 @@ class TutoriaServiceTest {
         t.setEstudiante(estudiante);
         t.setDocente(docente);
         t.setEstado(EstadoTutoria.CONFIRMADA);
-        t.setFecha(LocalDateTime.now().plusDays(1));
+        t.setFecha(LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
         t.setDuracionMinutos(60);
 
         ActualizarTutoriaRequest req = new ActualizarTutoriaRequest(
-                LocalDateTime.now().plusDays(5), 60, null
+                LocalDateTime.now().plusDays(5).withHour(10).withMinute(0), 60, null
         );
 
         when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
@@ -351,7 +647,7 @@ class TutoriaServiceTest {
     void actualizar_confirmada_soloNotas_ok() {
         autenticarComo(estudiante);
 
-        LocalDateTime fechaFija = LocalDateTime.now().plusDays(1);
+        LocalDateTime fechaFija = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
         Tutoria t = new Tutoria();
         t.setId(UUID.randomUUID());
         t.setEstudiante(estudiante);
@@ -384,7 +680,7 @@ class TutoriaServiceTest {
         t.setEstudiante(estudiante);
         t.setDocente(docente);
         t.setEstado(EstadoTutoria.PENDIENTE);
-        t.setFecha(LocalDateTime.now().plusDays(1));
+        t.setFecha(LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
         t.setDuracionMinutos(60);
 
         ActualizarTutoriaRequest req = new ActualizarTutoriaRequest(
@@ -413,7 +709,7 @@ class TutoriaServiceTest {
         t.setEstado(EstadoTutoria.PENDIENTE);
 
         ActualizarTutoriaRequest req = new ActualizarTutoriaRequest(
-                LocalDateTime.now().plusDays(2), 60, null
+                LocalDateTime.now().plusDays(2).withHour(10).withMinute(0), 60, null
         );
 
         when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
@@ -449,7 +745,7 @@ class TutoriaServiceTest {
         t.setEstudiante(estudiante);
         t.setDocente(docente);
         t.setEstado(estado);
-        t.setFecha(LocalDateTime.now().plusDays(1));
+        t.setFecha(LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
         t.setDuracionMinutos(60);
         return t;
     }
@@ -472,6 +768,7 @@ class TutoriaServiceTest {
 
         when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
                 .thenReturn(Optional.of(t));
+        mockDisponibilidadValidaYNoSolape();
         when(tutoriaRepository.save(t)).thenReturn(t);
         when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
                 .thenReturn(Optional.of(t));
@@ -489,6 +786,7 @@ class TutoriaServiceTest {
 
         when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
                 .thenReturn(Optional.of(t));
+        mockDisponibilidadValidaYNoSolape();
         when(tutoriaRepository.save(t)).thenReturn(t);
         when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
                 .thenReturn(Optional.of(t));
@@ -497,6 +795,56 @@ class TutoriaServiceTest {
         tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.CONFIRMADA);
 
         assertThat(t.getEstado()).isEqualTo(EstadoTutoria.CONFIRMADA);
+    }
+
+    @Test
+    void cambiarEstado_aConfirmada_conSolape_lanzaBusinessException() {
+        autenticarComo(docente);
+        LocalDateTime fecha = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        Tutoria t = tutoriaConEstado(EstadoTutoria.PENDIENTE);
+        t.setFecha(fecha);
+        t.setDuracionMinutos(60);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(disponibilidadTutoriaRepository.findByDocenteIdAndDiaSemana(eq(docenteId), any()))
+                .thenReturn(List.of(bloqueValido(fecha.getDayOfWeek(), LocalTime.of(8, 0), LocalTime.of(12, 0), false)));
+
+        Tutoria solapada = new Tutoria();
+        solapada.setId(UUID.randomUUID());
+        solapada.setDocente(docente);
+        solapada.setEstudiante(new Usuario());
+        solapada.setFecha(fecha);
+        solapada.setDuracionMinutos(60);
+        solapada.setEstado(EstadoTutoria.CONFIRMADA);
+
+        when(tutoriaRepository.findConfirmadasCandidatasSolape(eq(docenteId), eq(estudianteId), any(), any(), eq(t.getId())))
+                .thenReturn(List.of(solapada));
+
+        assertThatThrownBy(() -> tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.CONFIRMADA))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("solapa");
+
+        verify(tutoriaRepository, never()).save(any());
+    }
+
+    @Test
+    void cambiarEstado_aCancelada_noRevalida() {
+        autenticarComo(estudiante);
+        Tutoria t = tutoriaConEstado(EstadoTutoria.PENDIENTE);
+
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaRepository.save(t)).thenReturn(t);
+        when(tutoriaRepository.findWithEstudianteDocenteCursoById(t.getId()))
+                .thenReturn(Optional.of(t));
+        when(tutoriaMapper.toResponse(t)).thenReturn(mock(TutoriaResponse.class));
+
+        tutoriaService.cambiarEstado(t.getId(), EstadoTutoria.CANCELADA);
+
+        assertThat(t.getEstado()).isEqualTo(EstadoTutoria.CANCELADA);
+        verify(disponibilidadTutoriaRepository, never()).findByDocenteIdAndDiaSemana(any(), any());
+        verify(tutoriaRepository, never()).findConfirmadasCandidatasSolape(any(), any(), any(), any(), any());
     }
 
     @Test

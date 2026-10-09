@@ -4,9 +4,11 @@ import com.kellyacademy.calendar.dto.request.ActualizarTutoriaRequest;
 import com.kellyacademy.calendar.dto.request.CrearTutoriaRequest;
 import com.kellyacademy.calendar.dto.response.TutoriaResponse;
 import com.kellyacademy.calendar.dto.response.TutoriaResumenResponse;
+import com.kellyacademy.calendar.entity.DisponibilidadTutoria;
 import com.kellyacademy.calendar.entity.Tutoria;
 import com.kellyacademy.calendar.enums.EstadoTutoria;
 import com.kellyacademy.calendar.mapper.TutoriaMapper;
+import com.kellyacademy.calendar.repository.DisponibilidadTutoriaRepository;
 import com.kellyacademy.calendar.repository.TutoriaRepository;
 import com.kellyacademy.calendar.specification.TutoriaSpecifications;
 import com.kellyacademy.course.entity.Curso;
@@ -28,7 +30,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -41,6 +46,7 @@ public class TutoriaService {
     private static final String ROL_DOCENTE = "DOCENTE";
 
     private final TutoriaRepository tutoriaRepository;
+    private final DisponibilidadTutoriaRepository disponibilidadTutoriaRepository;
     private final TutoriaMapper tutoriaMapper;
     private final UsuarioRepository usuarioRepository;
     private final CursoRepository cursoRepository;
@@ -92,10 +98,12 @@ public class TutoriaService {
         // Deuda #45: fecha futura.
         validarFechaFutura(request.fecha());
 
+        // Slice #47 (D7): la tutoria no puede cruzar medianoche al dia siguiente.
+        validarCruceMedianoche(request.fecha(), request.duracionMinutos());
+
         Usuario estudiante = usuarioRepository.findWithRolesById(request.estudianteId())
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", request.estudianteId()));
         validarTieneRol(estudiante, ROL_ESTUDIANTE, "ESTUDIANTE_SIN_ROL");
-
 
         Usuario docente = usuarioRepository.findWithRolesById(request.docenteId())
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", request.docenteId()));
@@ -108,6 +116,12 @@ public class TutoriaService {
 
             validarPertenenciaAlCurso(curso, estudiante, docente);
         }
+
+        // Slice #47: validar disponibilidad docente.
+        validarDisponibilidadDocente(request.fecha(), request.duracionMinutos(), docente.getId());
+
+        // Slice #48: validar no solape contra tutorias confirmadas.
+        validarNoSolapeTutoria(request.fecha(), request.duracionMinutos(), docente.getId(), estudiante.getId(), null);
 
         Tutoria entity = tutoriaMapper.toEntity(request);
         entity.setEstudiante(estudiante);
@@ -135,9 +149,20 @@ public class TutoriaService {
         // 'notas' es informacion, editable siempre.
         validarEdicionPermitida(tutoria, request);
 
+        boolean cambiaFecha = !Objects.equals(tutoria.getFecha(), request.fecha());
+        boolean cambiaDuracion = !Objects.equals(tutoria.getDuracionMinutos(), request.duracionMinutos());
+
         // Deuda #45: si se cambia la fecha, debe ser futura.
-        if (!Objects.equals(tutoria.getFecha(), request.fecha())) {
+        if (cambiaFecha) {
             validarFechaFutura(request.fecha());
+        }
+
+        // Slice #47 + #48: revalidar disponibilidad y solape SOLO si cambia fecha o duracion.
+        if (cambiaFecha || cambiaDuracion) {
+            validarCruceMedianoche(request.fecha(), request.duracionMinutos());
+            validarDisponibilidadDocente(request.fecha(), request.duracionMinutos(), tutoria.getDocente().getId());
+            validarNoSolapeTutoria(request.fecha(), request.duracionMinutos(),
+                    tutoria.getDocente().getId(), tutoria.getEstudiante().getId(), tutoria.getId());
         }
 
         tutoriaMapper.actualizarDesdeRequest(request, tutoria);
@@ -174,6 +199,14 @@ public class TutoriaService {
         }
 
         validarTransicionEstado(actual, nuevoEstado);
+
+        // Slice #47 + #48: al confirmar, revalidar disponibilidad y no solape.
+        if (nuevoEstado == EstadoTutoria.CONFIRMADA) {
+            validarCruceMedianoche(tutoria.getFecha(), tutoria.getDuracionMinutos());
+            validarDisponibilidadDocente(tutoria.getFecha(), tutoria.getDuracionMinutos(), tutoria.getDocente().getId());
+            validarNoSolapeTutoria(tutoria.getFecha(), tutoria.getDuracionMinutos(),
+                    tutoria.getDocente().getId(), tutoria.getEstudiante().getId(), tutoria.getId());
+        }
 
         tutoria.setEstado(nuevoEstado);
 
@@ -243,6 +276,77 @@ public class TutoriaService {
             throw new BusinessException(
                     "TUTORIA_FECHA_PASADA",
                     "La fecha de la tutoria debe ser posterior al momento actual."
+            );
+        }
+    }
+
+    // Slice #47 (D7): cruce de medianoche al dia siguiente.
+    private void validarCruceMedianoche(LocalDateTime fecha, Integer duracionMinutos) {
+        if (!fecha.plusMinutes(duracionMinutos).toLocalDate().equals(fecha.toLocalDate())) {
+            throw new BusinessException(
+                    "TUTORIA_CRUZA_MEDIANOCHE",
+                    "La tutoria no puede cruzar medianoche al dia siguiente."
+            );
+        }
+    }
+
+    // Slice #47 (D1, D2, D3): disponibilidad docente en el bloque solicitado.
+    private void validarDisponibilidadDocente(LocalDateTime fecha, Integer duracionMinutos, UUID docenteId) {
+        DayOfWeek diaSemana = fecha.getDayOfWeek();
+        LocalTime horaInicio = fecha.toLocalTime();
+        LocalTime horaFin = fecha.plusMinutes(duracionMinutos).toLocalTime();
+
+        List<DisponibilidadTutoria> bloques = disponibilidadTutoriaRepository
+                .findByDocenteIdAndDiaSemana(docenteId, diaSemana);
+
+        List<DisponibilidadTutoria> bloquesQueCubren = bloques.stream()
+                .filter(b -> !b.getHoraInicio().isAfter(horaInicio) && !b.getHoraFin().isBefore(horaFin))
+                .toList();
+
+        if (bloquesQueCubren.isEmpty()) {
+            throw new BusinessException(
+                    "TUTORIA_SIN_DISPONIBILIDAD",
+                    "El docente no tiene disponibilidad en el horario solicitado."
+            );
+        }
+
+        boolean hayBloqueValido = bloquesQueCubren.stream()
+                .anyMatch(b -> Boolean.FALSE.equals(b.getBloqueada()));
+
+        if (!hayBloqueValido) {
+            throw new BusinessException(
+                    "DISPONIBILIDAD_BLOQUEADA",
+                    "El bloque de disponibilidad del docente para este horario se encuentra bloqueado."
+            );
+        }
+    }
+
+    // Slice #48 (D4, D5, D6): solapamiento con tutorias CONFIRMADAS del docente o estudiante.
+    private void validarNoSolapeTutoria(
+            LocalDateTime fecha,
+            Integer duracionMinutos,
+            UUID docenteId,
+            UUID estudianteId,
+            UUID excluirId
+    ) {
+        LocalDateTime inicio = fecha;
+        LocalDateTime fin = fecha.plusMinutes(duracionMinutos);
+        LocalDateTime ventanaInicio = inicio.minusMinutes(240);
+
+        List<Tutoria> candidatas = tutoriaRepository.findConfirmadasCandidatasSolape(
+                docenteId, estudianteId, ventanaInicio, fin, excluirId
+        );
+
+        boolean haySolape = candidatas.stream().anyMatch(c -> {
+            LocalDateTime cInicio = c.getFecha();
+            LocalDateTime cFin = cInicio.plusMinutes(c.getDuracionMinutos());
+            return cInicio.isBefore(fin) && inicio.isBefore(cFin);
+        });
+
+        if (haySolape) {
+            throw new BusinessException(
+                    "TUTORIA_SOLAPADA",
+                    "Existe otra tutoria confirmada que se solapa con el horario solicitado."
             );
         }
     }

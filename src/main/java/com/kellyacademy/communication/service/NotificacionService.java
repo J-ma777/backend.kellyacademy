@@ -22,7 +22,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -118,38 +125,69 @@ public class NotificacionService {
                                       String titulo,
                                       String cuerpo,
                                       String link) {
-        if (usuarioId == null) {
-            throw new BusinessException("USUARIO_ID_REQUERIDO", "El ID del usuario es obligatorio.");
-        }
-        if (tipo == null) {
-            throw new BusinessException("TIPO_NOTIFICACION_REQUERIDO", "El tipo de notificacion es obligatorio.");
-        }
-        if (titulo == null || titulo.isBlank()) {
-            throw new BusinessException("TITULO_REQUERIDO", "El titulo es obligatorio.");
-        }
-        if (titulo.length() > 200) {
-            throw new BusinessException("TITULO_MUY_LARGO", "El titulo no puede exceder 200 caracteres.");
-        }
-        if (cuerpo != null && cuerpo.length() > 500) {
-            throw new BusinessException("CUERPO_MUY_LARGO", "El cuerpo no puede exceder 500 caracteres.");
-        }
-        if (link != null && !link.isBlank()) {
-            validarUrl(link);
+        return crearBatch(List.of(new NuevaNotificacion(usuarioId, tipo, titulo, cuerpo, link)))
+                .getFirst();
+    }
+
+    public List<NotificacionResponse> crearBatch(List<NuevaNotificacion> destinatarios) {
+        if (destinatarios == null || destinatarios.isEmpty()) {
+            return List.of();
         }
 
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", usuarioId));
+        for (NuevaNotificacion item : destinatarios) {
+            validarUsuarioId(item.usuarioId());
+            validarTipo(item.tipo());
+            validarTitulo(item.titulo());
+            validarCuerpo(item.cuerpo());
+            if (item.link() != null && !item.link().isBlank()) {
+                validarUrl(item.link());
+            }
+        }
 
-        Notificacion entity = new Notificacion();
-        entity.setUsuario(usuario);
-        entity.setTipo(tipo);
-        entity.setTitulo(titulo);
-        entity.setCuerpo(cuerpo);
-        entity.setLink(link);
-        entity.setLeida(false);
+        LinkedHashSet<UUID> idsUnicos = destinatarios.stream()
+                .map(NuevaNotificacion::usuarioId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        Notificacion guardada = notificacionRepository.save(entity);
-        return notificacionMapper.toResponse(guardada);
+        List<Usuario> encontrados = usuarioRepository.findAllById(idsUnicos);
+        if (encontrados.size() != idsUnicos.size()) {
+            Set<UUID> hallados = encontrados.stream()
+                    .map(Usuario::getId)
+                    .collect(Collectors.toSet());
+            UUID faltante = idsUnicos.stream()
+                    .filter(id -> !hallados.contains(id))
+                    .findFirst()
+                    .orElseThrow();
+            throw new ResourceNotFoundException("Usuario", "id", faltante);
+        }
+
+        Map<UUID, Usuario> usuariosPorId = encontrados.stream()
+                .collect(Collectors.toMap(Usuario::getId, Function.identity()));
+
+        List<Notificacion> entidades = new ArrayList<>(destinatarios.size());
+        for (NuevaNotificacion item : destinatarios) {
+            Notificacion entity = new Notificacion();
+            entity.setUsuario(usuariosPorId.get(item.usuarioId()));
+            entity.setTipo(item.tipo());
+            entity.setTitulo(item.titulo());
+            entity.setCuerpo(item.cuerpo());
+            entity.setLink(item.link());
+            entity.setLeida(false);
+            entidades.add(entity);
+        }
+
+        return notificacionRepository.saveAll(entidades).stream()
+                .map(notificacionMapper::toResponse)
+                .toList();
+    }
+
+    // Visible para AnuncioService y tests del mismo paquete. No es DTO HTTP.
+    record NuevaNotificacion(
+            UUID usuarioId,
+            TipoNotificacion tipo,
+            String titulo,
+            String cuerpo,
+            String link
+    ) {
     }
 
     // -------- autorizacion --------
@@ -173,6 +211,33 @@ public class NotificacionService {
     }
 
     // -------- helpers --------
+
+    private void validarUsuarioId(UUID usuarioId) {
+        if (usuarioId == null) {
+            throw new BusinessException("USUARIO_ID_REQUERIDO", "El ID del usuario es obligatorio.");
+        }
+    }
+
+    private void validarTipo(TipoNotificacion tipo) {
+        if (tipo == null) {
+            throw new BusinessException("TIPO_NOTIFICACION_REQUERIDO", "El tipo de notificacion es obligatorio.");
+        }
+    }
+
+    private void validarTitulo(String titulo) {
+        if (titulo == null || titulo.isBlank()) {
+            throw new BusinessException("TITULO_REQUERIDO", "El titulo es obligatorio.");
+        }
+        if (titulo.length() > 200) {
+            throw new BusinessException("TITULO_MUY_LARGO", "El titulo no puede exceder 200 caracteres.");
+        }
+    }
+
+    private void validarCuerpo(String cuerpo) {
+        if (cuerpo != null && cuerpo.length() > 500) {
+            throw new BusinessException("CUERPO_MUY_LARGO", "El cuerpo no puede exceder 500 caracteres.");
+        }
+    }
 
     private void validarUrl(String url) {
         // Acepta dos formatos validos para "link":

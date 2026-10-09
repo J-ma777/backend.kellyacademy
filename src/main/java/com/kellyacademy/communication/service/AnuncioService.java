@@ -142,18 +142,18 @@ public class AnuncioService {
         String titulo = "Nuevo anuncio: " + anuncio.getTitulo();
         String link = "/api/anuncios/" + anuncio.getId();
 
-        for (Matricula matricula : matriculas) {
-            UUID estudianteId = matricula.getEstudiante().getId();
-            if (estudianteId.equals(autorId)) {
-                continue; // No auto-notificarse.
-            }
-            notificacionService.crear(
-                    estudianteId,
-                    TipoNotificacion.ANUNCIO,
-                    titulo,
-                    null,
-                    link
-            );
-        }
+        List<NotificacionService.NuevaNotificacion> destinatarios = matriculas.stream()
+                .map(matricula -> matricula.getEstudiante().getId())
+                .filter(estudianteId -> !estudianteId.equals(autorId))
+                .map(estudianteId -> new NotificacionService.NuevaNotificacion(
+                        estudianteId,
+                        TipoNotificacion.ANUNCIO,
+                        titulo,
+                        null,
+                        link
+                ))
+                .toList();
+
+        notificacionService.crearBatch(destinatarios);
     }
 }

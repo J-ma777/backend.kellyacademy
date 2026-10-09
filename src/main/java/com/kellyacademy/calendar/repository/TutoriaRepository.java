@@ -42,4 +42,23 @@ public interface TutoriaRepository extends
     @Override
     @EntityGraph(attributePaths = {"estudiante", "docente", "curso"})
     Page<Tutoria> findAll(@Nullable Specification<Tutoria> spec, Pageable pageable);
+
+    // Slice #48: busca tutorias CONFIRMADAS candidatas para solape por docente o estudiante.
+    // El filtro fino de solape de intervalos [inicio, fin] x [t.fecha, t.fecha + duracion]
+    // se realiza en TutoriaService para maxima portabilidad entre H2 y PostgreSQL.
+    @Query("""
+            SELECT t FROM Tutoria t
+            WHERE t.estado = com.kellyacademy.calendar.enums.EstadoTutoria.CONFIRMADA
+              AND (:excluirId IS NULL OR t.id <> :excluirId)
+              AND (t.docente.id = :docenteId OR t.estudiante.id = :estudianteId)
+              AND t.fecha >= :ventanaInicio
+              AND t.fecha < :fin
+            """)
+    List<Tutoria> findConfirmadasCandidatasSolape(
+            @Param("docenteId") UUID docenteId,
+            @Param("estudianteId") UUID estudianteId,
+            @Param("ventanaInicio") LocalDateTime ventanaInicio,
+            @Param("fin") LocalDateTime fin,
+            @Param("excluirId") UUID excluirId
+    );
 }

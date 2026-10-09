@@ -5,9 +5,12 @@ import com.kellyacademy.attendance.dto.request.CrearAsistenciaRequest;
 import com.kellyacademy.attendance.dto.response.AsistenciaResponse;
 import com.kellyacademy.attendance.dto.response.AsistenciaResumenResponse;
 import com.kellyacademy.attendance.entity.Asistencia;
+import com.kellyacademy.attendance.enums.EstadoAsistencia;
 import com.kellyacademy.attendance.mapper.AsistenciaMapper;
 import com.kellyacademy.attendance.repository.AsistenciaRepository;
 import com.kellyacademy.attendance.specification.AsistenciaSpecifications;
+import com.kellyacademy.communication.enums.TipoNotificacion;
+import com.kellyacademy.communication.service.NotificacionService;
 import com.kellyacademy.course.entity.Clase;
 import com.kellyacademy.course.repository.ClaseRepository;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
@@ -27,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 @Service
@@ -36,12 +40,17 @@ public class AsistenciaService {
 
     private static final String ROL_ESTUDIANTE = "ESTUDIANTE";
 
+    // Formato de fecha para mensajes de notificacion (sin helper compartido en el proyecto).
+    private static final DateTimeFormatter FMT_FECHA_CLASE =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
     private final AsistenciaRepository asistenciaRepository;
     private final ClaseRepository claseRepository;
     private final UsuarioRepository usuarioRepository;
     private final MatriculaRepository matriculaRepository;
     private final AsistenciaMapper asistenciaMapper;
     private final CalculoMatriculaService calculoMatriculaService;
+    private final NotificacionService notificacionService;
 
     // -------- listar --------
 
@@ -128,6 +137,12 @@ public class AsistenciaService {
         matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudiante.getId())
                 .ifPresent(m -> calculoMatriculaService.recalcular(m.getId()));
 
+        // D1: notificar si el estado resultante es notificable (AUSENTE, TARDE, JUSTIFICADO).
+        // Si es PRESENTE no se notifica.
+        if (esNotificable(guardada.getEstado())) {
+            notificarCambioAsistencia(guardada);
+        }
+
         return asistenciaMapper.toResponse(guardada);
     }
 
@@ -139,12 +154,24 @@ public class AsistenciaService {
 
         validarDocenteDueno(asistencia.getClase());
 
+        // D2: capturar el estado ANTERIOR antes de que el mapper lo sobreescriba.
+        // CRITICO: si se captura despues de actualizarDesdeRequest, estadoAnterior == estadoNuevo.
+        EstadoAsistencia estadoAnterior = asistencia.getEstado();
+
         asistenciaMapper.actualizarDesdeRequest(request, asistencia);
 
         UUID cursoId = asistencia.getClase().getSemana().getUnidad().getCurso().getId();
         UUID estudianteId = asistencia.getEstudiante().getId();
         matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)
                 .ifPresent(m -> calculoMatriculaService.recalcular(m.getId()));
+
+        // D2: notificar solo si el estado CAMBIO y el nuevo estado es notificable.
+        // Si el estado no cambio (solo se edito observacion): no notificar.
+        // Si el nuevo estado es PRESENTE: no notificar aunque antes fuera AUSENTE (D9).
+        EstadoAsistencia estadoNuevo = asistencia.getEstado();
+        if (!estadoNuevo.equals(estadoAnterior) && esNotificable(estadoNuevo)) {
+            notificarCambioAsistencia(asistencia);
+        }
 
         return asistenciaMapper.toResponse(asistencia);
     }
@@ -189,5 +216,48 @@ public class AsistenciaService {
         }
 
         throw new AccessDeniedException("No tiene permiso para consultar esta asistencia.");
+    }
+
+    // -------- helpers de notificacion --------
+
+    /*
+     Retorna true si el estado debe generar una notificacion al estudiante.
+     D3: AUSENTE, TARDE y JUSTIFICADO son notificables. PRESENTE NO lo es.
+     */
+    private boolean esNotificable(EstadoAsistencia estado) {
+        return estado == EstadoAsistencia.AUSENTE
+                || estado == EstadoAsistencia.TARDE
+                || estado == EstadoAsistencia.JUSTIFICADO;
+    }
+
+    /*
+     Construye y persiste la notificacion para el estudiante destinatario.
+     D4: tipo ASISTENCIA. D5: destinatario = estudiante (no docente).
+     D6: link = "/api/asistencias/{id}".
+     D7: mensaje varia segun estado; fecha formateada con AppTime.ZONA_NEGOCIO.
+     D8: sincrona, misma transaccion.
+     */
+    private void notificarCambioAsistencia(Asistencia asistencia) {
+        EstadoAsistencia estado = asistencia.getEstado();
+        LocalDateTime fechaHora = asistencia.getClase().getFechaHora();
+
+        String fechaFormateada = (fechaHora != null)
+                ? fechaHora.atZone(AppTime.ZONA_NEGOCIO).format(FMT_FECHA_CLASE)
+                : "fecha no asignada";
+
+        String cuerpo = switch (estado) {
+            case AUSENTE     -> "Registraron tu asistencia como AUSENTE para la clase del " + fechaFormateada + ".";
+            case TARDE       -> "Registraron tu asistencia como TARDE para la clase del " + fechaFormateada + ".";
+            case JUSTIFICADO -> "Tu falta fue JUSTIFICADA para la clase del " + fechaFormateada + ".";
+            default          -> throw new IllegalStateException("Estado no notificable: " + estado);
+        };
+
+        notificacionService.crear(
+                asistencia.getEstudiante().getId(),
+                TipoNotificacion.ASISTENCIA,
+                "Asistencia registrada",
+                cuerpo,
+                "/api/asistencias/" + asistencia.getId()
+        );
     }
 }

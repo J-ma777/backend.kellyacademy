@@ -30,4 +30,12 @@ public interface ClaseRepository extends JpaRepository<Clase, UUID> {
     })
     @Query("SELECT c FROM Clase c WHERE c.id = :id")
     Optional<Clase> findWithSemanaCursoDocenteById(@Param("id") UUID id);
+
+    @Query("""
+        SELECT COUNT(c) FROM Clase c
+        WHERE c.semana.unidad.curso.id = :cursoId
+          AND c.fechaHora IS NOT NULL
+          AND c.fechaHora <= :ahora
+    """)
+    long contarClasesDictadasPorCurso(@Param("cursoId") UUID cursoId, @Param("ahora") LocalDateTime ahora);
 }

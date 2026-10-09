@@ -37,6 +37,7 @@ class MatriculaServiceTest {
     @Mock private CursoRepository cursoRepository;
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private MatriculaMapper matriculaMapper;
+    @Mock private CalculoMatriculaService calculoMatriculaService;
 
     @InjectMocks private MatriculaService matriculaService;
 
@@ -258,5 +259,22 @@ class MatriculaServiceTest {
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getCodigo()).isEqualTo("TRANSICION_ESTADO_INVALIDA");
                 });
+    }
+
+    @Test
+    void recalcular_conMatriculaCompletada_llamaRecalcularIgnorandoEstado() {
+        UUID id = UUID.randomUUID();
+        Matricula m = new Matricula();
+        m.setId(id);
+        m.setEstado(EstadoMatricula.COMPLETADA);
+
+        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+        when(matriculaMapper.toResponse(m)).thenReturn(mock(MatriculaResponse.class));
+
+        MatriculaResponse response = matriculaService.recalcular(id);
+
+        assertThat(response).isNotNull();
+        verify(calculoMatriculaService).recalcularIgnorandoEstado(id);
+        verify(calculoMatriculaService, never()).recalcular(id);
     }
 }

@@ -44,6 +44,7 @@ public class MatriculaService {
     private final CursoRepository cursoRepository;
     private final UsuarioRepository usuarioRepository;
     private final MatriculaMapper matriculaMapper;
+    private final CalculoMatriculaService calculoMatriculaService;
 
     @Transactional(readOnly = true)
     public Page<MatriculaResumenResponse> listar(
@@ -124,6 +125,15 @@ public class MatriculaService {
         validarTransicionEstado(actual, nuevoEstado);
 
         matricula.setEstado(nuevoEstado);
+
+        return matriculaMapper.toResponse(matricula);
+    }
+
+    public MatriculaResponse recalcular(UUID id) {
+        calculoMatriculaService.recalcularIgnorandoEstado(id);
+
+        Matricula matricula = matriculaRepository.findWithCursoAndEstudianteById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         return matriculaMapper.toResponse(matricula);
     }

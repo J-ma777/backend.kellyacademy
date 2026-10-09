@@ -48,4 +48,17 @@ public interface EntregaRepository extends
     @Override
     @EntityGraph(attributePaths = {"tarea", "estudiante"})
     Page<Entrega> findAll(@Nullable Specification<Entrega> spec, Pageable pageable);
+
+    @Query("""
+        SELECT e.nota AS nota, e.tarea.puntajeMaximo AS puntajeMaximo
+        FROM Entrega e
+        WHERE e.tarea.semana.unidad.curso.id = :cursoId
+          AND e.estudiante.id = :estudianteId
+          AND e.estado = com.kellyacademy.enrollment.enums.EstadoEntrega.CALIFICADA
+          AND e.nota IS NOT NULL
+    """)
+    List<NotaPuntajeProjection> findNotasCalificadasPorCursoYEstudiante(
+            @Param("cursoId") UUID cursoId,
+            @Param("estudianteId") UUID estudianteId
+    );
 }

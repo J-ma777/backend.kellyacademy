@@ -36,6 +36,7 @@ class EntregaControllerIT extends IntegrationTestBase {
     private UUID tareaId;
     private UUID estudianteId;
     private String estudianteToken;
+    private UUID matriculaId;
 
     @BeforeEach
     void prepararEscenario() {
@@ -53,9 +54,10 @@ class EntregaControllerIT extends IntegrationTestBase {
         activarCurso(cursoId);
 
         // Matricula del estudiante en el curso.
-        post("/api/matriculas", adminToken,
+        MatriculaResponse matriculaResp = post("/api/matriculas", adminToken,
                 new CrearMatriculaRequest(cursoId, estudianteId),
-                MatriculaResponse.class);
+                MatriculaResponse.class).getBody();
+        matriculaId = Objects.requireNonNull(matriculaResp).id();
 
         // Jerarquia: unidad -> semana -> tarea con deadline futuro.
         UUID unidadId = Objects.requireNonNull(
@@ -358,5 +360,27 @@ class EntregaControllerIT extends IntegrationTestBase {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(Objects.requireNonNull(resp.getBody()).urlArchivo()).isNull();
+    }
+
+    @Test
+    void calificar_flujoEndToEnd_actualizaNotaFinalMatricula() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, req, EntregaResponse.class).getBody()).id();
+
+        patch("/api/entregas/" + entregaId + "/calificar",
+                docenteDuenoToken,
+                new CalificarEntregaRequest(new BigDecimal("88.00"), "Excelente"),
+                EntregaResponse.class);
+
+        ResponseEntity<MatriculaResponse> respMatricula = get(
+                "/api/matriculas/" + matriculaId, adminToken, MatriculaResponse.class
+        );
+
+        assertThat(respMatricula.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(respMatricula.getBody()).notaFinal())
+                .isEqualByComparingTo(new BigDecimal("88.00"));
     }
 }

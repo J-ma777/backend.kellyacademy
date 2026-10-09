@@ -63,4 +63,10 @@ public class MatriculaController {
         matriculaService.eliminar(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{id}/recalcular")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<MatriculaResponse> recalcular(@PathVariable UUID id) {
+        return ResponseEntity.ok(matriculaService.recalcular(id));
+    }
 }

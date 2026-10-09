@@ -11,6 +11,7 @@ import com.kellyacademy.attendance.specification.AsistenciaSpecifications;
 import com.kellyacademy.course.entity.Clase;
 import com.kellyacademy.course.repository.ClaseRepository;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
+import com.kellyacademy.enrollment.service.CalculoMatriculaService;
 import com.kellyacademy.shared.config.AppTime;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
@@ -40,6 +41,7 @@ public class AsistenciaService {
     private final UsuarioRepository usuarioRepository;
     private final MatriculaRepository matriculaRepository;
     private final AsistenciaMapper asistenciaMapper;
+    private final CalculoMatriculaService calculoMatriculaService;
 
     // -------- listar --------
 
@@ -122,6 +124,10 @@ public class AsistenciaService {
         entity.setRegistradoAt(LocalDateTime.now(AppTime.ZONA_NEGOCIO));
 
         Asistencia guardada = asistenciaRepository.save(entity);
+
+        matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudiante.getId())
+                .ifPresent(m -> calculoMatriculaService.recalcular(m.getId()));
+
         return asistenciaMapper.toResponse(guardada);
     }
 
@@ -134,15 +140,28 @@ public class AsistenciaService {
         validarDocenteDueno(asistencia.getClase());
 
         asistenciaMapper.actualizarDesdeRequest(request, asistencia);
+
+        UUID cursoId = asistencia.getClase().getSemana().getUnidad().getCurso().getId();
+        UUID estudianteId = asistencia.getEstudiante().getId();
+        matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)
+                .ifPresent(m -> calculoMatriculaService.recalcular(m.getId()));
+
         return asistenciaMapper.toResponse(asistencia);
     }
 
     // -------- eliminar --------
 
     public void eliminar(UUID id) {
-        Asistencia asistencia = asistenciaRepository.findById(id)
+        Asistencia asistencia = asistenciaRepository.findWithClaseAndEstudianteById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Asistencia", "id", id));
+
+        UUID cursoId = asistencia.getClase().getSemana().getUnidad().getCurso().getId();
+        UUID estudianteId = asistencia.getEstudiante().getId();
+
         asistenciaRepository.delete(asistencia);
+
+        matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)
+                .ifPresent(m -> calculoMatriculaService.recalcular(m.getId()));
     }
 
     // -------- autorizacion --------

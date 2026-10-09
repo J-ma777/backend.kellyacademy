@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -34,6 +35,7 @@ class AsistenciaControllerIT extends IntegrationTestBase {
     private UUID cursoId;
     private UUID claseId;
     private UUID estudianteId;
+    private UUID matriculaId;
     private String estudianteToken;
     private String estudianteAjenoToken;
 
@@ -82,7 +84,8 @@ class AsistenciaControllerIT extends IntegrationTestBase {
 
         // Matriculamos al estudiante dueno.
         CrearMatriculaRequest m = new CrearMatriculaRequest(cursoId, estudianteId);
-        post("/api/matriculas", adminToken, m, MatriculaResponse.class);
+        MatriculaResponse matriculaResp = post("/api/matriculas", adminToken, m, MatriculaResponse.class).getBody();
+        matriculaId = Objects.requireNonNull(matriculaResp).id();
     }
 
     // -------- crear --------
@@ -338,5 +341,22 @@ class AsistenciaControllerIT extends IntegrationTestBase {
                 deleteWithBody("/api/asistencias/" + asistenciaId, docenteDuenoToken, ErrorResponse.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void crear_flujoEndToEnd_actualizaAsistenciaPorcentajeMatricula() {
+        CrearAsistenciaRequest req = new CrearAsistenciaRequest(
+                claseId, estudianteId, EstadoAsistencia.PRESENTE, "Asistio puntual"
+        );
+        post("/api/asistencias", docenteDuenoToken, req, AsistenciaResponse.class);
+
+        ResponseEntity<MatriculaResponse> respMatricula = get(
+                "/api/matriculas/" + matriculaId, adminToken, MatriculaResponse.class
+        );
+
+        assertThat(respMatricula.getStatusCode()).isEqualTo(HttpStatus.OK);
+        // 1 clase dictada, 1 PRESENTE -> 100.00%
+        assertThat(Objects.requireNonNull(respMatricula.getBody()).asistenciaPorcentaje())
+                .isEqualByComparingTo(new BigDecimal("100.00"));
     }
 }

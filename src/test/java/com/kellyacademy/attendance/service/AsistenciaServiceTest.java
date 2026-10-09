@@ -7,6 +7,8 @@ import com.kellyacademy.attendance.entity.Asistencia;
 import com.kellyacademy.attendance.enums.EstadoAsistencia;
 import com.kellyacademy.attendance.mapper.AsistenciaMapper;
 import com.kellyacademy.attendance.repository.AsistenciaRepository;
+import com.kellyacademy.communication.enums.TipoNotificacion;
+import com.kellyacademy.communication.service.NotificacionService;
 import com.kellyacademy.course.entity.Clase;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.entity.Semana;
@@ -39,6 +41,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -50,6 +53,7 @@ class AsistenciaServiceTest {
     @Mock private MatriculaRepository matriculaRepository;
     @Mock private AsistenciaMapper asistenciaMapper;
     @Mock private CalculoMatriculaService calculoMatriculaService;
+    @Mock private NotificacionService notificacionService;
 
     @InjectMocks private AsistenciaService asistenciaService;
 
@@ -112,7 +116,42 @@ class AsistenciaServiceTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
-    // -------- crear --------
+    // -------- helpers de escenario --------
+
+    /**
+     * Configura los mocks comunes para crear una asistencia con el estado indicado.
+     * Retorna la entidad "guardada" para que los tests puedan inspeccionarla.
+     */
+    private Asistencia prepararCrearAsistencia(EstadoAsistencia estado) {
+        autenticarComo(docente);
+
+        Asistencia guardada = new Asistencia();
+        guardada.setId(UUID.randomUUID());
+        guardada.setClase(clase);
+        guardada.setEstudiante(estudiante);
+        guardada.setEstado(estado);
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        CrearAsistenciaRequest request = new CrearAsistenciaRequest(
+                claseId, estudianteId, estado, null
+        );
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(true);
+        when(asistenciaRepository.findByClaseIdAndEstudianteId(claseId, estudianteId)).thenReturn(Optional.empty());
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
+        when(asistenciaMapper.toEntity(request)).thenReturn(new Asistencia());
+        when(asistenciaRepository.save(any(Asistencia.class))).thenReturn(guardada);
+        when(asistenciaMapper.toResponse(guardada)).thenReturn(mock(AsistenciaResponse.class));
+
+        asistenciaService.crear(request);
+        return guardada;
+    }
+
+    // -------- crear (tests existentes sin cambios) --------
 
     @Test
     void crear_cuandoTodoValido_retornaAsistenciaResponse() {
@@ -124,6 +163,7 @@ class AsistenciaServiceTest {
 
         Asistencia guardada = new Asistencia();
         guardada.setId(UUID.randomUUID());
+        guardada.setEstado(EstadoAsistencia.PRESENTE);
 
         Matricula matriculaMock = new Matricula();
         matriculaMock.setId(UUID.randomUUID());
@@ -141,7 +181,8 @@ class AsistenciaServiceTest {
 
         assertThat(response).isNotNull();
         verify(asistenciaRepository).save(any(Asistencia.class));
-        verify(calculoMatriculaService).recalcular(matriculaMock.getId());
+        // PRESENTE no notifica.
+        verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -158,6 +199,7 @@ class AsistenciaServiceTest {
         Matricula matriculaMock = new Matricula();
         matriculaMock.setId(UUID.randomUUID());
 
+        // AUSENTE -> PRESENTE: no notifica (D9).
         ActualizarAsistenciaRequest request = new ActualizarAsistenciaRequest(
                 EstadoAsistencia.PRESENTE, "Llego justificado luego"
         );
@@ -170,6 +212,8 @@ class AsistenciaServiceTest {
 
         assertThat(response).isNotNull();
         verify(calculoMatriculaService).recalcular(matriculaMock.getId());
+        // AUSENTE -> PRESENTE: nuevo estado es PRESENTE, no notifica.
+        verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -315,5 +359,211 @@ class AsistenciaServiceTest {
 
         assertThatThrownBy(() -> asistenciaService.crear(request))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    // -------- crear: tests de notificacion (slice #62) --------
+
+    @Test
+    void crear_cuandoEstadoEsPresente_noNotifica() {
+        prepararCrearAsistencia(EstadoAsistencia.PRESENTE);
+
+        verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void crear_cuandoEstadoEsAusente_notifica() {
+        Asistencia guardada = prepararCrearAsistencia(EstadoAsistencia.AUSENTE);
+
+        verify(notificacionService).crear(
+                eq(guardada.getEstudiante().getId()),
+                eq(TipoNotificacion.ASISTENCIA),
+                eq("Asistencia registrada"),
+                any(String.class),
+                eq("/api/asistencias/" + guardada.getId())
+        );
+    }
+
+    @Test
+    void crear_cuandoEstadoEsTarde_notifica() {
+        Asistencia guardada = prepararCrearAsistencia(EstadoAsistencia.TARDE);
+
+        verify(notificacionService).crear(
+                eq(guardada.getEstudiante().getId()),
+                eq(TipoNotificacion.ASISTENCIA),
+                eq("Asistencia registrada"),
+                any(String.class),
+                eq("/api/asistencias/" + guardada.getId())
+        );
+    }
+
+    @Test
+    void crear_cuandoEstadoEsJustificado_notifica() {
+        Asistencia guardada = prepararCrearAsistencia(EstadoAsistencia.JUSTIFICADO);
+
+        verify(notificacionService).crear(
+                eq(guardada.getEstudiante().getId()),
+                eq(TipoNotificacion.ASISTENCIA),
+                eq("Asistencia registrada"),
+                any(String.class),
+                eq("/api/asistencias/" + guardada.getId())
+        );
+    }
+
+    @Test
+    void crear_notificacionIncluyeLinkCorrecto() {
+        Asistencia guardada = prepararCrearAsistencia(EstadoAsistencia.AUSENTE);
+
+        String linkEsperado = "/api/asistencias/" + guardada.getId();
+        verify(notificacionService).crear(
+                any(), any(), any(), any(), eq(linkEsperado)
+        );
+    }
+
+    // -------- actualizar: tests de notificacion (slice #62) --------
+
+    @Test
+    void actualizar_cuandoEstadoNoCambia_noNotifica() {
+        autenticarComo(docente);
+
+        UUID asistenciaId = UUID.randomUUID();
+        Asistencia asistencia = new Asistencia();
+        asistencia.setId(asistenciaId);
+        asistencia.setClase(clase);
+        asistencia.setEstudiante(estudiante);
+        asistencia.setEstado(EstadoAsistencia.AUSENTE);
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        // Mismo estado AUSENTE -> AUSENTE (solo cambia observacion).
+        ActualizarAsistenciaRequest request = new ActualizarAsistenciaRequest(
+                EstadoAsistencia.AUSENTE, "Actualiza solo observacion"
+        );
+
+        when(asistenciaRepository.findWithClaseAndEstudianteById(asistenciaId)).thenReturn(Optional.of(asistencia));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
+        when(asistenciaMapper.toResponse(asistencia)).thenReturn(mock(AsistenciaResponse.class));
+
+        // El mapper deja el estado igual (AUSENTE -> AUSENTE): simular con doNothing.
+        doNothing().when(asistenciaMapper).actualizarDesdeRequest(request, asistencia);
+
+        asistenciaService.actualizar(asistenciaId, request);
+
+        // El estado no cambio -> no notifica.
+        verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void actualizar_cuandoCambiaAusenteATarde_notifica() {
+        autenticarComo(docente);
+
+        UUID asistenciaId = UUID.randomUUID();
+        Asistencia asistencia = new Asistencia();
+        asistencia.setId(asistenciaId);
+        asistencia.setClase(clase);
+        asistencia.setEstudiante(estudiante);
+        asistencia.setEstado(EstadoAsistencia.AUSENTE); // estado anterior
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        ActualizarAsistenciaRequest request = new ActualizarAsistenciaRequest(
+                EstadoAsistencia.TARDE, null
+        );
+
+        when(asistenciaRepository.findWithClaseAndEstudianteById(asistenciaId)).thenReturn(Optional.of(asistencia));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
+        when(asistenciaMapper.toResponse(asistencia)).thenReturn(mock(AsistenciaResponse.class));
+
+        // El mapper aplica el nuevo estado sobre la entidad.
+        doAnswer(inv -> {
+            asistencia.setEstado(EstadoAsistencia.TARDE);
+            return null;
+        }).when(asistenciaMapper).actualizarDesdeRequest(request, asistencia);
+
+        asistenciaService.actualizar(asistenciaId, request);
+
+        // AUSENTE -> TARDE: estado cambio y TARDE es notificable.
+        verify(notificacionService).crear(
+                eq(estudianteId),
+                eq(TipoNotificacion.ASISTENCIA),
+                eq("Asistencia registrada"),
+                any(String.class),
+                eq("/api/asistencias/" + asistenciaId)
+        );
+    }
+
+    @Test
+    void actualizar_cuandoCambiaAusenteAPresente_noNotifica() {
+        autenticarComo(docente);
+
+        UUID asistenciaId = UUID.randomUUID();
+        Asistencia asistencia = new Asistencia();
+        asistencia.setId(asistenciaId);
+        asistencia.setClase(clase);
+        asistencia.setEstudiante(estudiante);
+        asistencia.setEstado(EstadoAsistencia.AUSENTE); // estado anterior
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        ActualizarAsistenciaRequest request = new ActualizarAsistenciaRequest(
+                EstadoAsistencia.PRESENTE, null
+        );
+
+        when(asistenciaRepository.findWithClaseAndEstudianteById(asistenciaId)).thenReturn(Optional.of(asistencia));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
+        when(asistenciaMapper.toResponse(asistencia)).thenReturn(mock(AsistenciaResponse.class));
+
+        // El mapper aplica PRESENTE sobre la entidad.
+        doAnswer(inv -> {
+            asistencia.setEstado(EstadoAsistencia.PRESENTE);
+            return null;
+        }).when(asistenciaMapper).actualizarDesdeRequest(request, asistencia);
+
+        asistenciaService.actualizar(asistenciaId, request);
+
+        // AUSENTE -> PRESENTE: nuevo estado es PRESENTE, D9 -> no notifica.
+        verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void actualizar_cuandoCambiaPresenteAAusente_notifica() {
+        autenticarComo(docente);
+
+        UUID asistenciaId = UUID.randomUUID();
+        Asistencia asistencia = new Asistencia();
+        asistencia.setId(asistenciaId);
+        asistencia.setClase(clase);
+        asistencia.setEstudiante(estudiante);
+        asistencia.setEstado(EstadoAsistencia.PRESENTE); // estado anterior
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        ActualizarAsistenciaRequest request = new ActualizarAsistenciaRequest(
+                EstadoAsistencia.AUSENTE, null
+        );
+
+        when(asistenciaRepository.findWithClaseAndEstudianteById(asistenciaId)).thenReturn(Optional.of(asistencia));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
+        when(asistenciaMapper.toResponse(asistencia)).thenReturn(mock(AsistenciaResponse.class));
+
+        // El mapper aplica AUSENTE sobre la entidad.
+        doAnswer(inv -> {
+            asistencia.setEstado(EstadoAsistencia.AUSENTE);
+            return null;
+        }).when(asistenciaMapper).actualizarDesdeRequest(request, asistencia);
+
+        asistenciaService.actualizar(asistenciaId, request);
+
+        // PRESENTE -> AUSENTE: estado cambio y AUSENTE es notificable.
+        verify(notificacionService).crear(
+                eq(estudianteId),
+                eq(TipoNotificacion.ASISTENCIA),
+                eq("Asistencia registrada"),
+                any(String.class),
+                eq("/api/asistencias/" + asistenciaId)
+        );
     }
 }

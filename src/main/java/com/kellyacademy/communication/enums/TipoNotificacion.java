@@ -5,5 +5,6 @@ public enum TipoNotificacion {
     CALIFICACION,
     MENSAJE,
     ANUNCIO,
-    SISTEMA
+    SISTEMA,
+    ASISTENCIA
 }

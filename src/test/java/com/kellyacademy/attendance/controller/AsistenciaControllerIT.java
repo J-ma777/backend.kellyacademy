@@ -4,6 +4,8 @@ import com.kellyacademy.attendance.dto.request.ActualizarAsistenciaRequest;
 import com.kellyacademy.attendance.dto.request.CrearAsistenciaRequest;
 import com.kellyacademy.attendance.dto.response.AsistenciaResponse;
 import com.kellyacademy.attendance.enums.EstadoAsistencia;
+import com.kellyacademy.communication.entity.Notificacion;
+import com.kellyacademy.communication.enums.TipoNotificacion;
 import com.kellyacademy.course.dto.request.CrearClaseRequest;
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
 import com.kellyacademy.course.dto.request.CrearSemanaRequest;
@@ -25,6 +27,7 @@ import org.springframework.http.ResponseEntity;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -358,5 +361,101 @@ class AsistenciaControllerIT extends IntegrationTestBase {
         // 1 clase dictada, 1 PRESENTE -> 100.00%
         assertThat(Objects.requireNonNull(respMatricula.getBody()).asistenciaPorcentaje())
                 .isEqualByComparingTo(new BigDecimal("100.00"));
+    }
+
+    // -------- notificacion end-to-end (slice #62) --------
+
+    @Test
+    void crear_cuandoEstadoEsAusente_generaNotificacionParaEstudiante() {
+        CrearAsistenciaRequest req = new CrearAsistenciaRequest(
+                claseId, estudianteId, EstadoAsistencia.AUSENTE, null
+        );
+        AsistenciaResponse creada = Objects.requireNonNull(
+                post("/api/asistencias", docenteDuenoToken, req, AsistenciaResponse.class).getBody()
+        );
+        UUID asistenciaId = creada.id();
+
+        // Verificar que la notificacion se persisitio en BD para el estudiante.
+        List<Notificacion> notificaciones =
+                notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA);
+
+        assertThat(notificaciones).hasSize(1);
+        Notificacion notif = notificaciones.get(0);
+        assertThat(notif.getTipo()).isEqualTo(TipoNotificacion.ASISTENCIA);
+        assertThat(notif.getTitulo()).isEqualTo("Asistencia registrada");
+        assertThat(notif.getCuerpo()).contains("AUSENTE");
+        assertThat(notif.getLink()).isEqualTo("/api/asistencias/" + asistenciaId);
+        assertThat(notif.getLeida()).isFalse();
+    }
+
+    @Test
+    void crear_cuandoEstadoEsPresente_noGeneraNotificacion() {
+        CrearAsistenciaRequest req = new CrearAsistenciaRequest(
+                claseId, estudianteId, EstadoAsistencia.PRESENTE, null
+        );
+        post("/api/asistencias", docenteDuenoToken, req, AsistenciaResponse.class);
+
+        // PRESENTE no notifica: la lista debe estar vacia.
+        List<Notificacion> notificaciones =
+                notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA);
+
+        assertThat(notificaciones).isEmpty();
+    }
+
+    @Test
+    void actualizar_cuandoCambiaEstadoAJustificado_generaNotificacionParaEstudiante() {
+        // 1. Crear asistencia PRESENTE (sin notificacion).
+        CrearAsistenciaRequest req = new CrearAsistenciaRequest(
+                claseId, estudianteId, EstadoAsistencia.PRESENTE, null
+        );
+        AsistenciaResponse creada = Objects.requireNonNull(
+                post("/api/asistencias", docenteDuenoToken, req, AsistenciaResponse.class).getBody()
+        );
+        UUID asistenciaId = creada.id();
+
+        // Sin notificacion tras crear PRESENTE.
+        assertThat(notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA))
+                .isEmpty();
+
+        // 2. Actualizar a JUSTIFICADO.
+        ActualizarAsistenciaRequest upd = new ActualizarAsistenciaRequest(
+                EstadoAsistencia.JUSTIFICADO, "Certificado medico"
+        );
+        put("/api/asistencias/" + asistenciaId, docenteDuenoToken, upd, AsistenciaResponse.class);
+
+        // 3. Verificar notificacion generada.
+        List<Notificacion> notificaciones =
+                notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA);
+
+        assertThat(notificaciones).hasSize(1);
+        Notificacion notif = notificaciones.get(0);
+        assertThat(notif.getTipo()).isEqualTo(TipoNotificacion.ASISTENCIA);
+        assertThat(notif.getCuerpo()).contains("JUSTIFICADA");
+        assertThat(notif.getLink()).isEqualTo("/api/asistencias/" + asistenciaId);
+    }
+
+    @Test
+    void actualizar_cuandoEstadoNoCambia_noGeneraNuevaNotificacion() {
+        // 1. Crear asistencia AUSENTE (genera 1 notificacion).
+        CrearAsistenciaRequest req = new CrearAsistenciaRequest(
+                claseId, estudianteId, EstadoAsistencia.AUSENTE, null
+        );
+        AsistenciaResponse creada = Objects.requireNonNull(
+                post("/api/asistencias", docenteDuenoToken, req, AsistenciaResponse.class).getBody()
+        );
+        UUID asistenciaId = creada.id();
+
+        assertThat(notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA))
+                .hasSize(1);
+
+        // 2. Actualizar solo la observacion (mismo estado AUSENTE).
+        ActualizarAsistenciaRequest upd = new ActualizarAsistenciaRequest(
+                EstadoAsistencia.AUSENTE, "Solo actualizo la observacion"
+        );
+        put("/api/asistencias/" + asistenciaId, docenteDuenoToken, upd, AsistenciaResponse.class);
+
+        // 3. Sigue habiendo solo 1 notificacion (la de la creacion).
+        assertThat(notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA))
+                .hasSize(1);
     }
 }

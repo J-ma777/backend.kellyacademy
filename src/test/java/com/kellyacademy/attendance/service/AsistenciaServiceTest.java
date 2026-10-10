@@ -2,6 +2,8 @@ package com.kellyacademy.attendance.service;
 
 import com.kellyacademy.attendance.dto.request.ActualizarAsistenciaRequest;
 import com.kellyacademy.attendance.dto.request.CrearAsistenciaRequest;
+import com.kellyacademy.attendance.dto.request.CrearAsistenciasMasivasRequest;
+import com.kellyacademy.attendance.dto.request.RegistroAsistenciaItemRequest;
 import com.kellyacademy.attendance.dto.response.AsistenciaResponse;
 import com.kellyacademy.attendance.entity.Asistencia;
 import com.kellyacademy.attendance.enums.EstadoAsistencia;
@@ -34,6 +36,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -565,5 +568,252 @@ class AsistenciaServiceTest {
                 any(String.class),
                 eq("/api/asistencias/" + asistenciaId)
         );
+    }
+
+    // ------------------------------------------------------------------
+    // crearMasivo (#63)
+    // ------------------------------------------------------------------
+
+    @Test
+    void crearMasivo_cuandoTodoValido_persisteYNotifica() {
+        autenticarComo(docente);
+
+        UUID estudiante2Id = UUID.randomUUID();
+        Usuario estudiante2 = new Usuario();
+        Rol rolEstudiante = new Rol();
+        rolEstudiante.setNombre("ESTUDIANTE");
+        estudiante2.setId(estudiante2Id);
+        estudiante2.setRoles(Set.of(rolEstudiante));
+
+        Matricula matricula1 = new Matricula();
+        matricula1.setId(UUID.randomUUID());
+        Matricula matricula2 = new Matricula();
+        matricula2.setId(UUID.randomUUID());
+
+        CrearAsistenciasMasivasRequest request = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(
+                        new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null),
+                        new RegistroAsistenciaItemRequest(estudiante2Id, EstadoAsistencia.AUSENTE, "Sin aviso")
+                )
+        );
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(usuarioRepository.findWithRolesById(estudiante2Id)).thenReturn(Optional.of(estudiante2));
+        when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(true);
+        when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudiante2Id)).thenReturn(true);
+        when(asistenciaRepository.findByClaseIdAndEstudianteId(eq(claseId), any())).thenReturn(Optional.empty());
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId))
+                .thenReturn(Optional.of(matricula1));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudiante2Id))
+                .thenReturn(Optional.of(matricula2));
+
+        Asistencia g1 = new Asistencia();
+        g1.setId(UUID.randomUUID());
+        g1.setClase(clase);
+        g1.setEstudiante(estudiante);
+        g1.setEstado(EstadoAsistencia.PRESENTE);
+
+        Asistencia g2 = new Asistencia();
+        g2.setId(UUID.randomUUID());
+        g2.setClase(clase);
+        g2.setEstudiante(estudiante2);
+        g2.setEstado(EstadoAsistencia.AUSENTE);
+
+        when(asistenciaRepository.saveAll(any())).thenReturn(List.of(g1, g2));
+        when(asistenciaMapper.toResponse(any(Asistencia.class))).thenReturn(mock(AsistenciaResponse.class));
+
+        List<AsistenciaResponse> resultado = asistenciaService.crearMasivo(request);
+
+        assertThat(resultado).hasSize(2);
+        verify(asistenciaRepository).saveAll(any());
+        verify(calculoMatriculaService).recalcular(matricula1.getId());
+        verify(calculoMatriculaService).recalcular(matricula2.getId());
+        // AUSENTE notifica, PRESENTE no.
+        verify(notificacionService, times(1)).crear(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void crearMasivo_estudianteDuplicadoEnBatch_lanzaBusinessException() {
+        autenticarComo(docente);
+
+        CrearAsistenciasMasivasRequest request = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(
+                        new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null),
+                        new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.AUSENTE, null)
+                )
+        );
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+
+        assertThatThrownBy(() -> asistenciaService.crearMasivo(request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ESTUDIANTE_DUPLICADO_EN_BATCH");
+                    assertThat(ex.getMessage()).contains(estudianteId.toString());
+                });
+
+        verify(asistenciaRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void crearMasivo_estudianteNoExiste_agrupaErrores() {
+        autenticarComo(docente);
+
+        UUID noExisteId = UUID.randomUUID();
+
+        CrearAsistenciasMasivasRequest request = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(
+                        new RegistroAsistenciaItemRequest(noExisteId, EstadoAsistencia.PRESENTE, null)
+                )
+        );
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+        when(usuarioRepository.findWithRolesById(noExisteId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> asistenciaService.crearMasivo(request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ASISTENCIAS_MASIVAS_CON_ERRORES");
+                    assertThat(ex.getMessage()).contains(noExisteId.toString());
+                    assertThat(ex.getMessage()).contains("no existe");
+                });
+
+        verify(asistenciaRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void crearMasivo_estudianteSinRol_agrupaErrores() {
+        autenticarComo(docente);
+
+        estudiante.setRoles(Set.of());
+
+        CrearAsistenciasMasivasRequest request = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null))
+        );
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+
+        assertThatThrownBy(() -> asistenciaService.crearMasivo(request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ASISTENCIAS_MASIVAS_CON_ERRORES");
+                    assertThat(ex.getMessage()).contains("ESTUDIANTE");
+                });
+    }
+
+    @Test
+    void crearMasivo_estudianteNoMatriculado_agrupaErrores() {
+        autenticarComo(docente);
+
+        CrearAsistenciasMasivasRequest request = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null))
+        );
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(false);
+
+        assertThatThrownBy(() -> asistenciaService.crearMasivo(request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ASISTENCIAS_MASIVAS_CON_ERRORES");
+                    assertThat(ex.getMessage()).contains("matriculado");
+                });
+    }
+
+    @Test
+    void crearMasivo_asistenciaDuplicada_agrupaErrores() {
+        autenticarComo(docente);
+
+        CrearAsistenciasMasivasRequest request = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null))
+        );
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(true);
+        when(asistenciaRepository.findByClaseIdAndEstudianteId(claseId, estudianteId))
+                .thenReturn(Optional.of(new Asistencia()));
+
+        assertThatThrownBy(() -> asistenciaService.crearMasivo(request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("ASISTENCIAS_MASIVAS_CON_ERRORES");
+                    assertThat(ex.getMessage()).contains("Ya existe asistencia");
+                });
+    }
+
+    @Test
+    void crearMasivo_claseNoImpartida_lanzaBusinessException() {
+        autenticarComo(docente);
+
+        clase.setFechaHora(LocalDateTime.now().plusDays(1));
+
+        CrearAsistenciasMasivasRequest request = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null))
+        );
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+
+        assertThatThrownBy(() -> asistenciaService.crearMasivo(request))
+                .isInstanceOfSatisfying(BusinessException.class, ex ->
+                        assertThat(ex.getCodigo()).isEqualTo("CLASE_NO_IMPARTIDA"));
+    }
+
+    @Test
+    void crearMasivo_docenteAjeno_lanzaAccessDenied() {
+        Rol rolDocente = new Rol();
+        rolDocente.setNombre("DOCENTE");
+        Usuario otroDocente = new Usuario();
+        otroDocente.setId(UUID.randomUUID());
+        otroDocente.setRoles(Set.of(rolDocente));
+        autenticarComo(otroDocente);
+
+        CrearAsistenciasMasivasRequest request = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null))
+        );
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+
+        assertThatThrownBy(() -> asistenciaService.crearMasivo(request))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    @Test
+    void crearMasivo_soloPresentes_noNotifica() {
+        autenticarComo(docente);
+
+        Matricula matricula1 = new Matricula();
+        matricula1.setId(UUID.randomUUID());
+
+        CrearAsistenciasMasivasRequest request = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null))
+        );
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(true);
+        when(asistenciaRepository.findByClaseIdAndEstudianteId(eq(claseId), any())).thenReturn(Optional.empty());
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId))
+                .thenReturn(Optional.of(matricula1));
+
+        Asistencia g1 = new Asistencia();
+        g1.setId(UUID.randomUUID());
+        g1.setClase(clase);
+        g1.setEstudiante(estudiante);
+        g1.setEstado(EstadoAsistencia.PRESENTE);
+
+        when(asistenciaRepository.saveAll(any())).thenReturn(List.of(g1));
+        when(asistenciaMapper.toResponse(any(Asistencia.class))).thenReturn(mock(AsistenciaResponse.class));
+
+        asistenciaService.crearMasivo(request);
+
+        verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
     }
 }

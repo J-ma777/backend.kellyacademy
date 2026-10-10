@@ -2,6 +2,8 @@ package com.kellyacademy.attendance.service;
 
 import com.kellyacademy.attendance.dto.request.ActualizarAsistenciaRequest;
 import com.kellyacademy.attendance.dto.request.CrearAsistenciaRequest;
+import com.kellyacademy.attendance.dto.request.CrearAsistenciasMasivasRequest;
+import com.kellyacademy.attendance.dto.request.RegistroAsistenciaItemRequest;
 import com.kellyacademy.attendance.dto.response.AsistenciaResponse;
 import com.kellyacademy.attendance.dto.response.AsistenciaResumenResponse;
 import com.kellyacademy.attendance.entity.Asistencia;
@@ -31,7 +33,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -40,7 +49,6 @@ public class AsistenciaService {
 
     private static final String ROL_ESTUDIANTE = "ESTUDIANTE";
 
-    // Formato de fecha para mensajes de notificacion (sin helper compartido en el proyecto).
     private static final DateTimeFormatter FMT_FECHA_CLASE =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
@@ -137,13 +145,90 @@ public class AsistenciaService {
         matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudiante.getId())
                 .ifPresent(m -> calculoMatriculaService.recalcular(m.getId()));
 
-        // D1: notificar si el estado resultante es notificable (AUSENTE, TARDE, JUSTIFICADO).
-        // Si es PRESENTE no se notifica.
         if (esNotificable(guardada.getEstado())) {
             notificarCambioAsistencia(guardada);
         }
 
         return asistenciaMapper.toResponse(guardada);
+    }
+
+    // -------- crear masivo (#63) --------
+
+    public List<AsistenciaResponse> crearMasivo(CrearAsistenciasMasivasRequest request) {
+
+        Clase clase = claseRepository.findWithSemanaCursoDocenteById(request.claseId())
+                .orElseThrow(() -> new ResourceNotFoundException("Clase", "id", request.claseId()));
+
+        validarDocenteDueno(clase);
+        validarClaseImpartida(clase);
+
+        UUID cursoId = clase.getSemana().getUnidad().getCurso().getId();
+
+        // 1. Detectar duplicados de estudianteId dentro del batch.
+        Set<UUID> estudiantesVistos = new HashSet<>();
+        Set<UUID> estudiantesDuplicados = new HashSet<>();
+        for (RegistroAsistenciaItemRequest item : request.registros()) {
+            if (!estudiantesVistos.add(item.estudianteId())) {
+                estudiantesDuplicados.add(item.estudianteId());
+            }
+        }
+        if (!estudiantesDuplicados.isEmpty()) {
+            String mensaje = estudiantesDuplicados.stream()
+                    .map(id -> id + ": el estudiante aparece mas de una vez en el batch.")
+                    .collect(Collectors.joining(" | "));
+            throw new BusinessException("ESTUDIANTE_DUPLICADO_EN_BATCH", mensaje);
+        }
+
+        // 2. Pre-validar cada registro. Acumula errores y los lanza juntos.
+        Map<String, String> errores = new LinkedHashMap<>();
+        Map<UUID, Usuario> estudiantesPorId = new LinkedHashMap<>();
+
+        for (RegistroAsistenciaItemRequest item : request.registros()) {
+            validarRegistroMasivo(item, clase, cursoId, estudiantesPorId, errores);
+        }
+
+        if (!errores.isEmpty()) {
+            String detalle = errores.entrySet().stream()
+                    .map(e -> e.getKey() + ": " + e.getValue())
+                    .collect(Collectors.joining(" | "));
+            throw new BusinessException(
+                    "ASISTENCIAS_MASIVAS_CON_ERRORES",
+                    "El batch contiene registros invalidos. Ninguna asistencia fue creada. Detalles: " + detalle
+            );
+        }
+
+        // 3. Persistir el batch completo.
+        LocalDateTime ahora = LocalDateTime.now(AppTime.ZONA_NEGOCIO);
+        List<Asistencia> aGuardar = new ArrayList<>(request.registros().size());
+        for (RegistroAsistenciaItemRequest item : request.registros()) {
+            Asistencia entity = new Asistencia();
+            entity.setClase(clase);
+            entity.setEstudiante(estudiantesPorId.get(item.estudianteId()));
+            entity.setEstado(item.estado());
+            entity.setObservacion(item.observacion());
+            entity.setRegistradoAt(ahora);
+            aGuardar.add(entity);
+        }
+        List<Asistencia> guardadas = asistenciaRepository.saveAll(aGuardar);
+
+        // 4. Recalcular matricula por estudiante.
+        for (Asistencia asistencia : guardadas) {
+            UUID estudianteId = asistencia.getEstudiante().getId();
+            matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)
+                    .ifPresent(m -> calculoMatriculaService.recalcular(m.getId()));
+        }
+
+        // 5. Notificar a los estudiantes con estado notificable.
+        //    crearBatch es package-private en communication y no accesible aqui.
+        for (Asistencia asistencia : guardadas) {
+            if (esNotificable(asistencia.getEstado())) {
+                notificarCambioAsistencia(asistencia);
+            }
+        }
+
+        return guardadas.stream()
+                .map(asistenciaMapper::toResponse)
+                .toList();
     }
 
     // -------- actualizar --------
@@ -154,8 +239,6 @@ public class AsistenciaService {
 
         validarDocenteDueno(asistencia.getClase());
 
-        // D2: capturar el estado ANTERIOR antes de que el mapper lo sobreescriba.
-        // CRITICO: si se captura despues de actualizarDesdeRequest, estadoAnterior == estadoNuevo.
         EstadoAsistencia estadoAnterior = asistencia.getEstado();
 
         asistenciaMapper.actualizarDesdeRequest(request, asistencia);
@@ -165,9 +248,6 @@ public class AsistenciaService {
         matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)
                 .ifPresent(m -> calculoMatriculaService.recalcular(m.getId()));
 
-        // D2: notificar solo si el estado CAMBIO y el nuevo estado es notificable.
-        // Si el estado no cambio (solo se edito observacion): no notificar.
-        // Si el nuevo estado es PRESENTE: no notificar aunque antes fuera AUSENTE (D9).
         EstadoAsistencia estadoNuevo = asistencia.getEstado();
         if (!estadoNuevo.equals(estadoAnterior) && esNotificable(estadoNuevo)) {
             notificarCambioAsistencia(asistencia);
@@ -204,13 +284,11 @@ public class AsistenciaService {
         }
         UUID autenticadoId = SecurityUtils.getUsuarioAutenticadoId();
 
-        // Docente dueno del curso de la clase.
         UUID docenteId = asistencia.getClase().getSemana().getUnidad().getCurso().getDocente().getId();
         if (docenteId.equals(autenticadoId)) {
             return;
         }
 
-        // Estudiante dueno de la asistencia.
         if (asistencia.getEstudiante().getId().equals(autenticadoId)) {
             return;
         }
@@ -218,26 +296,74 @@ public class AsistenciaService {
         throw new AccessDeniedException("No tiene permiso para consultar esta asistencia.");
     }
 
-    // -------- helpers de notificacion --------
+    // -------- helpers crearMasivo --------
 
-    /*
-     Retorna true si el estado debe generar una notificacion al estudiante.
-     D3: AUSENTE, TARDE y JUSTIFICADO son notificables. PRESENTE NO lo es.
-     */
+    private void validarClaseImpartida(Clase clase) {
+        if (clase.getFechaHora() == null) {
+            throw new BusinessException("CLASE_SIN_FECHA", "La clase no tiene fecha asignada.");
+        }
+        if (clase.getFechaHora().isAfter(LocalDateTime.now(AppTime.ZONA_NEGOCIO))) {
+            throw new BusinessException("CLASE_NO_IMPARTIDA", "La clase aun no se ha impartido.");
+        }
+    }
+
+    private void validarRegistroMasivo(RegistroAsistenciaItemRequest item,
+                                       Clase clase,
+                                       UUID cursoId,
+                                       Map<UUID, Usuario> estudiantesPorId,
+                                       Map<String, String> errores) {
+
+        UUID estudianteId = item.estudianteId();
+
+        Usuario estudiante = estudiantesPorId.get(estudianteId);
+        if (estudiante == null) {
+            var opt = usuarioRepository.findWithRolesById(estudianteId);
+            if (opt.isEmpty()) {
+                errores.put(estudianteId.toString(), "El estudiante no existe.");
+                return;
+            }
+            estudiante = opt.get();
+            estudiantesPorId.put(estudianteId, estudiante);
+        }
+
+        boolean tieneRolEstudiante = estudiante.getRoles().stream()
+                .anyMatch(r -> ROL_ESTUDIANTE.equals(r.getNombre()));
+        if (!tieneRolEstudiante) {
+            errores.put(estudianteId.toString(), "El usuario no tiene rol ESTUDIANTE.");
+            return;
+        }
+
+        if (!matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)) {
+            errores.put(estudianteId.toString(),
+                    "El estudiante no esta matriculado en el curso de la clase.");
+            return;
+        }
+
+        if (asistenciaRepository.findByClaseIdAndEstudianteId(clase.getId(), estudianteId).isPresent()) {
+            errores.put(estudianteId.toString(),
+                    "Ya existe asistencia para esta clase y estudiante.");
+        }
+    }
+
+    // -------- helpers notificacion --------
+
     private boolean esNotificable(EstadoAsistencia estado) {
         return estado == EstadoAsistencia.AUSENTE
                 || estado == EstadoAsistencia.TARDE
                 || estado == EstadoAsistencia.JUSTIFICADO;
     }
 
-    /*
-     Construye y persiste la notificacion para el estudiante destinatario.
-     D4: tipo ASISTENCIA. D5: destinatario = estudiante (no docente).
-     D6: link = "/api/asistencias/{id}".
-     D7: mensaje varia segun estado; fecha formateada con AppTime.ZONA_NEGOCIO.
-     D8: sincrona, misma transaccion.
-     */
     private void notificarCambioAsistencia(Asistencia asistencia) {
+        notificacionService.crear(
+                asistencia.getEstudiante().getId(),
+                TipoNotificacion.ASISTENCIA,
+                "Asistencia registrada",
+                construirCuerpoNotificacion(asistencia),
+                "/api/asistencias/" + asistencia.getId()
+        );
+    }
+
+    private String construirCuerpoNotificacion(Asistencia asistencia) {
         EstadoAsistencia estado = asistencia.getEstado();
         LocalDateTime fechaHora = asistencia.getClase().getFechaHora();
 
@@ -245,19 +371,11 @@ public class AsistenciaService {
                 ? fechaHora.atZone(AppTime.ZONA_NEGOCIO).format(FMT_FECHA_CLASE)
                 : "fecha no asignada";
 
-        String cuerpo = switch (estado) {
+        return switch (estado) {
             case AUSENTE     -> "Registraron tu asistencia como AUSENTE para la clase del " + fechaFormateada + ".";
             case TARDE       -> "Registraron tu asistencia como TARDE para la clase del " + fechaFormateada + ".";
             case JUSTIFICADO -> "Tu falta fue JUSTIFICADA para la clase del " + fechaFormateada + ".";
             default          -> throw new IllegalStateException("Estado no notificable: " + estado);
         };
-
-        notificacionService.crear(
-                asistencia.getEstudiante().getId(),
-                TipoNotificacion.ASISTENCIA,
-                "Asistencia registrada",
-                cuerpo,
-                "/api/asistencias/" + asistencia.getId()
-        );
     }
 }

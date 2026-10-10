@@ -2,6 +2,7 @@ package com.kellyacademy.attendance.controller;
 
 import com.kellyacademy.attendance.dto.request.ActualizarAsistenciaRequest;
 import com.kellyacademy.attendance.dto.request.CrearAsistenciaRequest;
+import com.kellyacademy.attendance.dto.request.CrearAsistenciasMasivasRequest;
 import com.kellyacademy.attendance.dto.response.AsistenciaResponse;
 import com.kellyacademy.attendance.dto.response.AsistenciaResumenResponse;
 import com.kellyacademy.attendance.service.AsistenciaService;
@@ -15,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -56,6 +58,14 @@ public class AsistenciaController {
             @PathVariable UUID id,
             @Valid @RequestBody ActualizarAsistenciaRequest request) {
         return ResponseEntity.ok(asistenciaService.actualizar(id, request));
+    }
+
+    @PostMapping("/masivo")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'DOCENTE')")
+    public ResponseEntity<List<AsistenciaResponse>> crearMasivo(
+            @Valid @RequestBody CrearAsistenciasMasivasRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(asistenciaService.crearMasivo(request));
     }
 
     @DeleteMapping("/{id}")

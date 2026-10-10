@@ -3,13 +3,11 @@ package com.kellyacademy.course.repository;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.enums.EstadoCurso;
 import com.kellyacademy.course.enums.NivelCefr;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import org.springframework.lang.Nullable;
 
@@ -43,4 +41,12 @@ public interface CursoRepository extends
     @Override
     @EntityGraph(attributePaths = {"docente"})
     Page<Curso> findAll(@Nullable Specification<Curso> spec, Pageable pageable);
+
+    // Lock pesimista sobre la fila del curso. Serializa operaciones concurrentes
+    // sobre la jerarquia del curso (reordenamiento de unidades). Sin @EntityGraph:
+    // en Postgres, FOR UPDATE sobre el lado nulable de un LEFT JOIN es invalido, y
+    // el lock solo necesita bloquear la fila padre, no el docente.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM Curso c WHERE c.id = :id")
+    Optional<Curso> findByIdForUpdate(@Param("id") UUID id);
 }

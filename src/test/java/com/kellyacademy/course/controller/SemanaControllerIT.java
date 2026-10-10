@@ -106,99 +106,137 @@ class SemanaControllerIT extends IntegrationTestBase {
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 
-        @Test
-        void reordenar_comoDocenteDueno_devuelve200() {
+    @Test
+    void reordenar_comoDocenteDueno_devuelve200() {
         SemanaResponse s1 = post("/api/semanas", adminToken,
-            new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+                new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
         SemanaResponse s2 = post("/api/semanas", adminToken,
-            new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
+                new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
 
         ResponseEntity<SemanaResumenResponse[]> resp = put(
-            "/api/unidades/" + unidadId + "/semanas/reordenar", docenteDuenoToken,
-            new ReordenarRequest(List.of(
-                new ReordenarRequest.ItemOrden(s2.id(), 1),
-                new ReordenarRequest.ItemOrden(s1.id(), 2)
-            )), SemanaResumenResponse[].class);
+                "/api/unidades/" + unidadId + "/semanas/reordenar", docenteDuenoToken,
+                new ReordenarRequest(List.of(
+                        new ReordenarRequest.ItemOrden(s2.id(), 1),
+                        new ReordenarRequest.ItemOrden(s1.id(), 2)
+                )), SemanaResumenResponse[].class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()[0].id()).isEqualTo(s2.id());
-        }
+    }
 
-        @Test
-        void reordenar_comoAdmin_devuelve200() {
+    @Test
+    void reordenar_comoAdmin_devuelve200() {
         SemanaResponse s1 = post("/api/semanas", adminToken,
-            new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+                new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
         SemanaResponse s2 = post("/api/semanas", adminToken,
-            new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
+                new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
 
         ResponseEntity<SemanaResumenResponse[]> resp = put(
-            "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
-            new ReordenarRequest(List.of(
-                new ReordenarRequest.ItemOrden(s2.id(), 1),
-                new ReordenarRequest.ItemOrden(s1.id(), 2)
-            )), SemanaResumenResponse[].class);
+                "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
+                new ReordenarRequest(List.of(
+                        new ReordenarRequest.ItemOrden(s2.id(), 1),
+                        new ReordenarRequest.ItemOrden(s1.id(), 2)
+                )), SemanaResumenResponse[].class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        }
+    }
 
-        @Test
-        void reordenar_comoDocenteAjeno_devuelve403() {
+    @Test
+    void reordenar_comoDocenteAjeno_devuelve403() {
         ResponseEntity<ErrorResponse> resp = put(
-            "/api/unidades/" + unidadId + "/semanas/reordenar", docenteAjenoToken,
-            new ReordenarRequest(List.of(new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1))),
-            ErrorResponse.class);
+                "/api/unidades/" + unidadId + "/semanas/reordenar", docenteAjenoToken,
+                new ReordenarRequest(List.of(new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1))),
+                ErrorResponse.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        }
+    }
 
-        @Test
-        void reordenar_faltanIds_devuelve400() {
+    @Test
+    void reordenar_faltanIds_devuelve400() {
         SemanaResponse s1 = post("/api/semanas", adminToken,
-            new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+                new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
         post("/api/semanas", adminToken, new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class);
 
         ResponseEntity<ErrorResponse> resp = put(
-            "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
-            new ReordenarRequest(List.of(new ReordenarRequest.ItemOrden(s1.id(), 1))), ErrorResponse.class);
+                "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
+                new ReordenarRequest(List.of(new ReordenarRequest.ItemOrden(s1.id(), 1))), ErrorResponse.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(resp.getBody().getCodigo()).isEqualTo("ORDEN_INCOMPLETO");
-        }
+    }
 
-        @Test
-        void reordenar_idsAjenos_devuelve400() {
+    @Test
+    void reordenar_idsAjenos_devuelve400() {
         SemanaResponse s1 = post("/api/semanas", adminToken,
-            new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+                new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
         SemanaResponse s2 = post("/api/semanas", adminToken,
-            new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
+                new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
 
         ResponseEntity<ErrorResponse> resp = put(
-            "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
-            new ReordenarRequest(List.of(
-                new ReordenarRequest.ItemOrden(s1.id(), 1),
-                new ReordenarRequest.ItemOrden(s2.id(), 2),
-                new ReordenarRequest.ItemOrden(UUID.randomUUID(), 3)
-            )), ErrorResponse.class);
+                "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
+                new ReordenarRequest(List.of(
+                        new ReordenarRequest.ItemOrden(s1.id(), 1),
+                        new ReordenarRequest.ItemOrden(s2.id(), 2),
+                        new ReordenarRequest.ItemOrden(UUID.randomUUID(), 3)
+                )), ErrorResponse.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(resp.getBody().getCodigo()).isEqualTo("ORDEN_CON_IDS_AJENOS");
-        }
+    }
 
-        @Test
-        void reordenar_numerosDuplicados_devuelve400() {
+    @Test
+    void reordenar_numerosDuplicados_devuelve400() {
         SemanaResponse s1 = post("/api/semanas", adminToken,
-            new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+                new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
         SemanaResponse s2 = post("/api/semanas", adminToken,
-            new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
+                new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
 
         ResponseEntity<ErrorResponse> resp = put(
-            "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
-            new ReordenarRequest(List.of(
-                new ReordenarRequest.ItemOrden(s1.id(), 1),
-                new ReordenarRequest.ItemOrden(s2.id(), 1)
-            )), ErrorResponse.class);
+                "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
+                new ReordenarRequest(List.of(
+                        new ReordenarRequest.ItemOrden(s1.id(), 1),
+                        new ReordenarRequest.ItemOrden(s2.id(), 1)
+                )), ErrorResponse.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(resp.getBody().getCodigo()).isEqualTo("ORDEN_CON_NUMEROS_DUPLICADOS");
-        }
+    }
+
+    // -------- lock pesimista (#82) --------
+
+    @Test
+    void reordenar_conLock_ok_devuelve200() {
+        // Verifica que el flujo end-to-end con el lock pesimista activo no rompe.
+        // El lock es sobre la fila de la Unidad; H2 en MODE=PostgreSQL soporta
+        // SELECT ... FOR UPDATE. La serializacion real bajo concurrencia
+        // se prueba con Testcontainers (deuda #20).
+        SemanaResponse s1 = post("/api/semanas", adminToken,
+                new CrearSemanaRequest(unidadId, 1, "S1", null), SemanaResponse.class).getBody();
+        SemanaResponse s2 = post("/api/semanas", adminToken,
+                new CrearSemanaRequest(unidadId, 2, "S2", null), SemanaResponse.class).getBody();
+
+        ResponseEntity<SemanaResumenResponse[]> resp = put(
+                "/api/unidades/" + unidadId + "/semanas/reordenar", adminToken,
+                new ReordenarRequest(List.of(
+                        new ReordenarRequest.ItemOrden(s2.id(), 1),
+                        new ReordenarRequest.ItemOrden(s1.id(), 2)
+                )), SemanaResumenResponse[].class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody()).hasSize(2);
+        assertThat(resp.getBody()[0].id()).isEqualTo(s2.id());
+        assertThat(resp.getBody()[1].id()).isEqualTo(s1.id());
+    }
+
+    @Test
+    void reordenar_unidadInexistenteConLock_devuelve404() {
+        // El lock pesimista falla con ResourceNotFound si la unidad no existe.
+        // Cubre el camino: findByIdForUpdate -> empty -> 404.
+        ResponseEntity<ErrorResponse> resp = put(
+                "/api/unidades/" + UUID.randomUUID() + "/semanas/reordenar", adminToken,
+                new ReordenarRequest(List.of(new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1))),
+                ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
 }

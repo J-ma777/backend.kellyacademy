@@ -102,6 +102,13 @@ public class SemanaService {
     }
 
     public List<SemanaResumenResponse> reordenar(UUID unidadId, ReordenarRequest request) {
+
+        // 1) Lock pesimista sobre la unidad. Serializa reordenamientos concurrentes
+        // de semanas sobre la misma unidad. Mismo patron que UnidadService.reordenar.
+        unidadRepository.findByIdForUpdate(unidadId)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_UNIDAD, "id", unidadId));
+
+        // 2) Carga con @EntityGraph para autorizacion (curso + docente).
         Unidad unidad = unidadRepository.findWithCursoDocenteById(unidadId)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO_UNIDAD, "id", unidadId));
 

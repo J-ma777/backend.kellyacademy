@@ -7,16 +7,24 @@ import com.kellyacademy.library.dto.request.CrearRecursoRequest;
 import com.kellyacademy.library.dto.response.DescargaRecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResponse;
 import com.kellyacademy.library.entity.RecursoBiblioteca;
+import com.kellyacademy.library.entity.RecursoDescarga;
 import com.kellyacademy.library.mapper.RecursoBibliotecaMapper;
 import com.kellyacademy.library.repository.RecursoBibliotecaRepository;
+import com.kellyacademy.library.repository.RecursoDescargaRepository;
+import com.kellyacademy.security.user.CustomUserDetails;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
+import com.kellyacademy.user.entity.Usuario;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -30,12 +38,14 @@ import static org.mockito.Mockito.*;
 class RecursoBibliotecaServiceTest {
 
     @Mock private RecursoBibliotecaRepository recursoRepository;
+    @Mock private RecursoDescargaRepository recursoDescargaRepository;
     @Mock private RecursoBibliotecaMapper recursoMapper;
 
     @InjectMocks private RecursoBibliotecaService recursoService;
 
     private UUID recursoId;
     private RecursoBiblioteca recurso;
+    private Usuario usuario;
 
     @BeforeEach
     void setUp() {
@@ -47,6 +57,23 @@ class RecursoBibliotecaServiceTest {
         recurso.setNivelCefr(NivelCefr.A2);
         recurso.setUrlArchivo("https://cdn.kelly.com/audio.mp3");
         recurso.setContadorDescargas(0);
+
+        usuario = new Usuario();
+        usuario.setId(UUID.randomUUID());
+        usuario.setCorreoElectronico("est@kelly.com");
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void autenticarComo(Usuario u) {
+        CustomUserDetails details = new CustomUserDetails(u);
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                details, null, details.getAuthorities()
+        );
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
     private CrearRecursoRequest requestValido(String urlArchivo, String urlExterno) {
@@ -152,7 +179,6 @@ class RecursoBibliotecaServiceTest {
 
     @Test
     void crear_urlConSchemeNoPermitido_lanzaBusinessException() {
-        // ftp no esta en el patron (https?|rtmp|rtsp).
         CrearRecursoRequest req = requestValido("ftp://archivo.com/x.mp3", null);
 
         assertThatThrownBy(() -> recursoService.crear(req))
@@ -264,13 +290,14 @@ class RecursoBibliotecaServiceTest {
     // -------- descargar --------
 
     @Test
-    void descargar_cuandoExiste_incrementaYDevuelve() {
+    void descargar_cuandoExiste_incrementaYRegistraTraza() {
         recurso.setContadorDescargas(5);
+        autenticarComo(usuario);
 
         when(recursoRepository.incrementarContadorDescargas(recursoId)).thenReturn(1);
         when(recursoRepository.findById(recursoId)).thenReturn(Optional.of(recurso));
 
-        DescargaRecursoResponse resp = recursoService.descargar(recursoId);
+        DescargaRecursoResponse resp = recursoService.descargar(recursoId, "203.0.113.10");
 
         assertThat(resp.id()).isEqualTo(recursoId);
         assertThat(resp.urlArchivo()).isEqualTo("https://cdn.kelly.com/audio.mp3");
@@ -278,6 +305,15 @@ class RecursoBibliotecaServiceTest {
         assertThat(resp.contadorDescargas()).isEqualTo(5);
 
         verify(recursoRepository).incrementarContadorDescargas(recursoId);
+
+        ArgumentCaptor<RecursoDescarga> captor = ArgumentCaptor.forClass(RecursoDescarga.class);
+        verify(recursoDescargaRepository).save(captor.capture());
+
+        RecursoDescarga traza = captor.getValue();
+        assertThat(traza.getRecurso()).isEqualTo(recurso);
+        assertThat(traza.getUsuario()).isEqualTo(usuario);
+        assertThat(traza.getIp()).isEqualTo("203.0.113.10");
+        assertThat(traza.getFechaDescarga()).isNotNull();
     }
 
     @Test
@@ -285,23 +321,26 @@ class RecursoBibliotecaServiceTest {
         UUID id = UUID.randomUUID();
         when(recursoRepository.incrementarContadorDescargas(id)).thenReturn(0);
 
-        assertThatThrownBy(() -> recursoService.descargar(id))
+        assertThatThrownBy(() -> recursoService.descargar(id, "203.0.113.10"))
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(recursoRepository, never()).findById(any());
+        verifyNoInteractions(recursoDescargaRepository);
     }
 
     @Test
     void descargar_recursoSinUrl_lanzaBusinessException() {
-        // Defensa en profundidad: la DB fue manipulada fuera del servicio.
         recurso.setUrlArchivo(null);
         recurso.setUrlExterno(null);
+        autenticarComo(usuario);
 
         when(recursoRepository.incrementarContadorDescargas(recursoId)).thenReturn(1);
         when(recursoRepository.findById(recursoId)).thenReturn(Optional.of(recurso));
 
-        assertThatThrownBy(() -> recursoService.descargar(recursoId))
+        assertThatThrownBy(() -> recursoService.descargar(recursoId, "203.0.113.10"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("al menos una URL");
+
+        verifyNoInteractions(recursoDescargaRepository);
     }
 }

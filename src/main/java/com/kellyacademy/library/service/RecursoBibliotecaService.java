@@ -8,11 +8,15 @@ import com.kellyacademy.library.dto.response.DescargaRecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResumenResponse;
 import com.kellyacademy.library.entity.RecursoBiblioteca;
+import com.kellyacademy.library.entity.RecursoDescarga;
 import com.kellyacademy.library.mapper.RecursoBibliotecaMapper;
 import com.kellyacademy.library.repository.RecursoBibliotecaRepository;
+import com.kellyacademy.library.repository.RecursoDescargaRepository;
 import com.kellyacademy.library.specification.RecursoBibliotecaSpecifications;
+import com.kellyacademy.shared.config.AppTime;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
+import com.kellyacademy.shared.util.SecurityUtils;
 import com.kellyacademy.shared.util.UrlValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,6 +25,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -29,6 +34,7 @@ import java.util.UUID;
 public class RecursoBibliotecaService {
 
     private final RecursoBibliotecaRepository recursoRepository;
+    private final RecursoDescargaRepository recursoDescargaRepository;
     private final RecursoBibliotecaMapper recursoMapper;
 
     // -------- listar --------
@@ -94,9 +100,10 @@ public class RecursoBibliotecaService {
     }
 
     // -------- descargar --------
-    // Incrementa contadorDescargas de forma atomica y devuelve URLs + contador
-    // actualizado. Cualquier autenticado puede descargar (catalogo publico).
-    public DescargaRecursoResponse descargar(UUID id) {
+    // Incrementa contadorDescargas de forma atomica, registra la traza de
+    // auditoria (usuario, ip, fecha) y devuelve URLs + contador actualizado.
+    // Cualquier autenticado puede descargar (catalogo publico).
+    public DescargaRecursoResponse descargar(UUID id, String ip) {
 
         // Un solo UPDATE atomico: evita race entre dos descargas simultaneas.
         int filas = recursoRepository.incrementarContadorDescargas(id);
@@ -111,12 +118,23 @@ public class RecursoBibliotecaService {
         // (deuda #49), pero si la DB fue manipulada externamente, fallamos claro.
         validarAlMenosUnaUrl(actualizado.getUrlArchivo(), actualizado.getUrlExterno());
 
+        registrarDescarga(actualizado, ip);
+
         return new DescargaRecursoResponse(
                 actualizado.getId(),
                 actualizado.getUrlArchivo(),
                 actualizado.getUrlExterno(),
                 actualizado.getContadorDescargas()
         );
+    }
+
+    private void registrarDescarga(RecursoBiblioteca recurso, String ip) {
+        RecursoDescarga descarga = new RecursoDescarga();
+        descarga.setRecurso(recurso);
+        descarga.setUsuario(SecurityUtils.getUsuarioAutenticado().getUsuario());
+        descarga.setIp(ip);
+        descarga.setFechaDescarga(LocalDateTime.now(AppTime.ZONA_NEGOCIO));
+        recursoDescargaRepository.save(descarga);
     }
 
     // -------- eliminar --------

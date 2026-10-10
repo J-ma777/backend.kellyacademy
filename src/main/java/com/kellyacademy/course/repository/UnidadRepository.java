@@ -1,8 +1,10 @@
 package com.kellyacademy.course.repository;
 
 import com.kellyacademy.course.entity.Unidad;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -23,4 +25,11 @@ public interface UnidadRepository extends JpaRepository<Unidad, UUID> {
     @EntityGraph(attributePaths = {"curso", "curso.docente"})
     @Query("SELECT u FROM Unidad u WHERE u.id = :id")
     Optional<Unidad> findWithCursoDocenteById(@Param("id") UUID id);
+
+    // Lock pesimista sobre la fila de la unidad. Serializa reordenamientos de
+    // semanas concurrentes sobre la misma unidad. Mismo patron que
+    // CursoRepository.findByIdForUpdate.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM Unidad u WHERE u.id = :id")
+    Optional<Unidad> findByIdForUpdate(@Param("id") UUID id);
 }

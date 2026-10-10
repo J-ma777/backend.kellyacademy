@@ -22,9 +22,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -36,7 +38,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -180,7 +184,6 @@ class SemanaServiceTest {
 
         assertThat(resultado.esActual()).isTrue();
 
-        // No debe buscar la anterior ni modificarla: ya era actual.
         verify(semanaRepository, never()).findByUnidadIdAndEsActualTrue(any());
     }
 
@@ -218,89 +221,130 @@ class SemanaServiceTest {
         assertThat(resultado.esActual()).isTrue();
     }
 
-        @Test
-        void reordenar_ok_devuelveNuevoOrden() {
+    @Test
+    void reordenar_ok_devuelveNuevoOrden() {
         Unidad unidad = unidadDeDocente();
         Semana s1 = semana(unidad, 1);
         Semana s2 = semana(unidad, 2);
         List<Semana> actuales = List.of(s1, s2);
         List<Semana> finales = List.of(s2, s1);
+        when(unidadRepository.findByIdForUpdate(unidad.getId())).thenReturn(Optional.of(unidad));
         when(unidadRepository.findWithCursoDocenteById(unidad.getId())).thenReturn(Optional.of(unidad));
         when(semanaRepository.findByUnidadIdOrderByNumeroAsc(unidad.getId())).thenReturn(actuales, finales);
 
         List<com.kellyacademy.course.dto.response.SemanaResumenResponse> resultado = semanaService.reordenar(
-            unidad.getId(), new ReordenarRequest(List.of(
-                new ReordenarRequest.ItemOrden(s2.getId(), 1),
-                new ReordenarRequest.ItemOrden(s1.getId(), 2)
-            )));
+                unidad.getId(), new ReordenarRequest(List.of(
+                        new ReordenarRequest.ItemOrden(s2.getId(), 1),
+                        new ReordenarRequest.ItemOrden(s1.getId(), 2)
+                )));
 
         assertThat(resultado).hasSize(2);
-        verify(semanaRepository, org.mockito.Mockito.times(2)).saveAll(actuales);
-        verify(semanaRepository, org.mockito.Mockito.times(2)).flush();
-        }
+        verify(semanaRepository, times(2)).saveAll(actuales);
+        verify(semanaRepository, times(2)).flush();
+    }
 
-        @Test
-        void reordenar_cuandoFaltanIds_lanzaBusinessException() {
+    @Test
+    void reordenar_adquiereLockAntesDeLeerSemanas() {
         Unidad unidad = unidadDeDocente();
         Semana s1 = semana(unidad, 1);
         Semana s2 = semana(unidad, 2);
+
+        when(unidadRepository.findByIdForUpdate(unidad.getId())).thenReturn(Optional.of(unidad));
+        when(unidadRepository.findWithCursoDocenteById(unidad.getId())).thenReturn(Optional.of(unidad));
+        when(semanaRepository.findByUnidadIdOrderByNumeroAsc(unidad.getId()))
+                .thenReturn(List.of(s1, s2), List.of(s2, s1));
+
+        semanaService.reordenar(unidad.getId(), new ReordenarRequest(List.of(
+                new ReordenarRequest.ItemOrden(s2.getId(), 1),
+                new ReordenarRequest.ItemOrden(s1.getId(), 2)
+        )));
+
+        InOrder orden = inOrder(unidadRepository, semanaRepository);
+        orden.verify(unidadRepository).findByIdForUpdate(unidad.getId());
+        orden.verify(unidadRepository).findWithCursoDocenteById(unidad.getId());
+        orden.verify(semanaRepository).findByUnidadIdOrderByNumeroAsc(unidad.getId());
+    }
+
+    @Test
+    void reordenar_lockNoEncuentraUnidad_lanzaResourceNotFound() {
+        UUID unidadId = UUID.randomUUID();
+        when(unidadRepository.findByIdForUpdate(unidadId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> semanaService.reordenar(unidadId, new ReordenarRequest(List.of(
+                new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1)
+        ))))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(unidadId.toString());
+
+        verify(semanaRepository, never()).findByUnidadIdOrderByNumeroAsc(any());
+    }
+
+    @Test
+    void reordenar_cuandoFaltanIds_lanzaBusinessException() {
+        Unidad unidad = unidadDeDocente();
+        Semana s1 = semana(unidad, 1);
+        Semana s2 = semana(unidad, 2);
+        when(unidadRepository.findByIdForUpdate(unidad.getId())).thenReturn(Optional.of(unidad));
         when(unidadRepository.findWithCursoDocenteById(unidad.getId())).thenReturn(Optional.of(unidad));
         when(semanaRepository.findByUnidadIdOrderByNumeroAsc(unidad.getId())).thenReturn(List.of(s1, s2));
 
         assertThatThrownBy(() -> semanaService.reordenar(unidad.getId(), new ReordenarRequest(List.of(
-            new ReordenarRequest.ItemOrden(s1.getId(), 1)
+                new ReordenarRequest.ItemOrden(s1.getId(), 1)
         )))).isInstanceOfSatisfying(BusinessException.class, ex ->
-            assertThat(ex.getCodigo()).isEqualTo("ORDEN_INCOMPLETO"));
-        }
+                assertThat(ex.getCodigo()).isEqualTo("ORDEN_INCOMPLETO"));
+    }
 
-        @Test
-        void reordenar_cuandoHayIdsAjenos_lanzaBusinessException() {
+    @Test
+    void reordenar_cuandoHayIdsAjenos_lanzaBusinessException() {
         Unidad unidad = unidadDeDocente();
         Semana s1 = semana(unidad, 1);
         Semana s2 = semana(unidad, 2);
+        when(unidadRepository.findByIdForUpdate(unidad.getId())).thenReturn(Optional.of(unidad));
         when(unidadRepository.findWithCursoDocenteById(unidad.getId())).thenReturn(Optional.of(unidad));
         when(semanaRepository.findByUnidadIdOrderByNumeroAsc(unidad.getId())).thenReturn(List.of(s1, s2));
 
         assertThatThrownBy(() -> semanaService.reordenar(unidad.getId(), new ReordenarRequest(List.of(
-            new ReordenarRequest.ItemOrden(s1.getId(), 1),
-            new ReordenarRequest.ItemOrden(s2.getId(), 2),
-            new ReordenarRequest.ItemOrden(UUID.randomUUID(), 3)
+                new ReordenarRequest.ItemOrden(s1.getId(), 1),
+                new ReordenarRequest.ItemOrden(s2.getId(), 2),
+                new ReordenarRequest.ItemOrden(UUID.randomUUID(), 3)
         )))).isInstanceOfSatisfying(BusinessException.class, ex ->
-            assertThat(ex.getCodigo()).isEqualTo("ORDEN_CON_IDS_AJENOS"));
-        }
+                assertThat(ex.getCodigo()).isEqualTo("ORDEN_CON_IDS_AJENOS"));
+    }
 
-        @Test
-        void reordenar_cuandoNumerosDuplicados_lanzaBusinessException() {
+    @Test
+    void reordenar_cuandoNumerosDuplicados_lanzaBusinessException() {
         Unidad unidad = unidadDeDocente();
         Semana s1 = semana(unidad, 1);
         Semana s2 = semana(unidad, 2);
+        when(unidadRepository.findByIdForUpdate(unidad.getId())).thenReturn(Optional.of(unidad));
         when(unidadRepository.findWithCursoDocenteById(unidad.getId())).thenReturn(Optional.of(unidad));
         when(semanaRepository.findByUnidadIdOrderByNumeroAsc(unidad.getId())).thenReturn(List.of(s1, s2));
 
         assertThatThrownBy(() -> semanaService.reordenar(unidad.getId(), new ReordenarRequest(List.of(
-            new ReordenarRequest.ItemOrden(s1.getId(), 1),
-            new ReordenarRequest.ItemOrden(s2.getId(), 1)
+                new ReordenarRequest.ItemOrden(s1.getId(), 1),
+                new ReordenarRequest.ItemOrden(s2.getId(), 1)
         )))).isInstanceOfSatisfying(BusinessException.class, ex ->
-            assertThat(ex.getCodigo()).isEqualTo("ORDEN_CON_NUMEROS_DUPLICADOS"));
-        }
+                assertThat(ex.getCodigo()).isEqualTo("ORDEN_CON_NUMEROS_DUPLICADOS"));
+    }
 
-        @Test
-        void reordenar_cuandoNoEsDocenteDueno_lanzaAccessDenied() {
+    @Test
+    void reordenar_cuandoNoEsDocenteDueno_lanzaAccessDenied() {
         Unidad unidad = unidadDeDocente();
         autenticarComo(UUID.randomUUID(), "DOCENTE");
+        when(unidadRepository.findByIdForUpdate(unidad.getId())).thenReturn(Optional.of(unidad));
         when(unidadRepository.findWithCursoDocenteById(unidad.getId())).thenReturn(Optional.of(unidad));
 
         assertThatThrownBy(() -> semanaService.reordenar(unidad.getId(), new ReordenarRequest(List.of(
-            new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1)
-        )))).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-        }
+                new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1)
+        )))).isInstanceOf(AccessDeniedException.class);
+    }
 
-        private Semana semana(Unidad unidad, int numero) {
+    private Semana semana(Unidad unidad, int numero) {
         Semana semana = new Semana();
         semana.setId(UUID.randomUUID());
         semana.setUnidad(unidad);
         semana.setNumero(numero);
         semana.setTitulo("S" + numero);
         return semana;
-        }
+    }
 }

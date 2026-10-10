@@ -96,6 +96,16 @@ public class UnidadService {
     }
 
     public List<UnidadResumenResponse> reordenar(UUID cursoId, ReordenarRequest request) {
+
+        // 1) Lock pesimista sobre el curso. Serializa reordenamientos concurrentes
+        // sobre la misma jerarquia. Sin este lock, dos transacciones pueden leer
+        // el mismo estado inicial y pisarse mutuamente (race entre SELECT y UPDATEs).
+        cursoRepository.findByIdForUpdate(cursoId)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_CURSO, "id", cursoId));
+
+        // 2) Carga con @EntityGraph para autorizacion. El lock no puede llevar
+        // @EntityGraph (FOR UPDATE + LEFT JOIN nulable es invalido en Postgres),
+        // asi que son dos SELECTs deliberados en la misma transaccion.
         Curso curso = cursoRepository.findWithDocenteById(cursoId)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO_CURSO, "id", cursoId));
 

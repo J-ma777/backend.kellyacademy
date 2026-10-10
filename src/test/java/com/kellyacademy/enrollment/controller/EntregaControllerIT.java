@@ -383,4 +383,58 @@ class EntregaControllerIT extends IntegrationTestBase {
         assertThat(Objects.requireNonNull(respMatricula.getBody()).notaFinal())
                 .isEqualByComparingTo(new BigDecimal("88.00"));
     }
+
+    @Test
+    void calificar_registraCalificadoAtYCalificadoPor() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, req, EntregaResponse.class).getBody()).id();
+
+        ResponseEntity<EntregaResponse> resp = patch(
+                "/api/entregas/" + entregaId + "/calificar",
+                docenteDuenoToken,
+                new CalificarEntregaRequest(new BigDecimal("85.50"), "Buen trabajo"),
+                EntregaResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        EntregaResponse body = Objects.requireNonNull(resp.getBody());
+        assertThat(body.calificadoAt()).isNotNull();
+        assertThat(body.calificadoPorId()).isEqualTo(docenteDuenoId);
+        assertThat(body.calificadoPorNombreCompleto()).isNotBlank();
+    }
+
+    @Test
+    void recalificar_sobrescribeCalificadoAtYCalificadoPor() {
+        CrearEntregaRequest req = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, req, EntregaResponse.class).getBody()).id();
+
+        // Primera calificacion por el docente dueno.
+        ResponseEntity<EntregaResponse> primera = patch(
+                "/api/entregas/" + entregaId + "/calificar",
+                docenteDuenoToken,
+                new CalificarEntregaRequest(new BigDecimal("70.00"), "Primera"),
+                EntregaResponse.class
+        );
+        LocalDateTime calificadoAtPrimera = Objects.requireNonNull(primera.getBody()).calificadoAt();
+        assertThat(calificadoAtPrimera).isNotNull();
+
+        // Re-calificacion por ADMIN: sobrescribe calificadoAt y calificadoPor.
+        ResponseEntity<EntregaResponse> segunda = patch(
+                "/api/entregas/" + entregaId + "/calificar",
+                adminToken,
+                new CalificarEntregaRequest(new BigDecimal("90.00"), "Corregida"),
+                EntregaResponse.class
+        );
+
+        assertThat(segunda.getStatusCode()).isEqualTo(HttpStatus.OK);
+        EntregaResponse body = Objects.requireNonNull(segunda.getBody());
+        assertThat(body.calificadoAt()).isAfter(calificadoAtPrimera);
+        assertThat(body.calificadoPorId()).isNotEqualTo(docenteDuenoId); // ahora es admin
+    }
 }

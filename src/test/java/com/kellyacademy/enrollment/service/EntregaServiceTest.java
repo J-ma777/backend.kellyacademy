@@ -249,35 +249,35 @@ class EntregaServiceTest {
                 .hasMessageContaining("calificada");
     }
 
-        @Test
-        void eliminar_cuandoCalificada_lanzaBusinessException() {
-                UUID entregaId = UUID.randomUUID();
-                Entrega entrega = new Entrega();
-                entrega.setId(entregaId);
-                entrega.setEstado(EstadoEntrega.CALIFICADA);
+    @Test
+    void eliminar_cuandoCalificada_lanzaBusinessException() {
+        UUID entregaId = UUID.randomUUID();
+        Entrega entrega = new Entrega();
+        entrega.setId(entregaId);
+        entrega.setEstado(EstadoEntrega.CALIFICADA);
 
-                when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
+        when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
 
-                assertThatThrownBy(() -> entregaService.eliminar(entregaId))
-                                .isInstanceOf(BusinessException.class)
-                                .hasMessageContaining("No se puede eliminar una entrega calificada");
+        assertThatThrownBy(() -> entregaService.eliminar(entregaId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("No se puede eliminar una entrega calificada");
 
-                verify(entregaRepository, never()).delete(any(Entrega.class));
-        }
+        verify(entregaRepository, never()).delete(any(Entrega.class));
+    }
 
-        @Test
-        void eliminar_cuandoPendiente_ok() {
-                UUID entregaId = UUID.randomUUID();
-                Entrega entrega = new Entrega();
-                entrega.setId(entregaId);
-                entrega.setEstado(EstadoEntrega.PENDIENTE);
+    @Test
+    void eliminar_cuandoPendiente_ok() {
+        UUID entregaId = UUID.randomUUID();
+        Entrega entrega = new Entrega();
+        entrega.setId(entregaId);
+        entrega.setEstado(EstadoEntrega.PENDIENTE);
 
-                when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
+        when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
 
-                entregaService.eliminar(entregaId);
+        entregaService.eliminar(entregaId);
 
-                verify(entregaRepository).delete(entrega);
-        }
+        verify(entregaRepository).delete(entrega);
+    }
 
     // -------- calificar (SLICE #21) --------
 
@@ -301,6 +301,7 @@ class EntregaServiceTest {
 
         when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
                 .thenReturn(Optional.of(entrega));
+        when(usuarioRepository.findById(docenteDuenoId)).thenReturn(Optional.of(docente));
         when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId))
                 .thenReturn(Optional.of(matriculaMock));
         when(entregaMapper.toResponse(entrega)).thenReturn(mock(EntregaResponse.class));
@@ -413,6 +414,7 @@ class EntregaServiceTest {
 
         when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
                 .thenReturn(Optional.of(entrega));
+        when(usuarioRepository.findById(docenteDuenoId)).thenReturn(Optional.of(docente));
         when(entregaMapper.toResponse(entrega)).thenReturn(mock(EntregaResponse.class));
 
         entregaService.calificar(entrega.getId(), request);
@@ -446,5 +448,75 @@ class EntregaServiceTest {
 
         assertThat(response).isNotNull();
         verify(entregaRepository).save(any(Entrega.class));
+    }
+
+    @Test
+    void calificar_seteaCalificadoAtYCalificadoPor() {
+        autenticarComo(docente);
+
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setTarea(tarea);
+        entrega.setEstudiante(estudiante);
+        entrega.setEstado(EstadoEntrega.PENDIENTE);
+
+        CalificarEntregaRequest request = new CalificarEntregaRequest(
+                new BigDecimal("85.50"), "Buen trabajo"
+        );
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
+                .thenReturn(Optional.of(entrega));
+        when(usuarioRepository.findById(docenteDuenoId)).thenReturn(Optional.of(docente));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId))
+                .thenReturn(Optional.of(matriculaMock));
+        when(entregaMapper.toResponse(entrega)).thenReturn(mock(EntregaResponse.class));
+
+        entregaService.calificar(entrega.getId(), request);
+
+        assertThat(entrega.getCalificadoAt()).isNotNull();
+        assertThat(entrega.getCalificadoPor()).isEqualTo(docente);
+    }
+
+    @Test
+    void recalificar_sobrescribeCalificadoAtYCalificadoPor() {
+        autenticarComo(docente);
+
+        // Entrega ya calificada previamente por otro docente.
+        Usuario calificadorOriginal = new Usuario();
+        calificadorOriginal.setId(UUID.randomUUID());
+
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setTarea(tarea);
+        entrega.setEstudiante(estudiante);
+        entrega.setEstado(EstadoEntrega.CALIFICADA);
+        entrega.setNota(new BigDecimal("70.00"));
+        entrega.setCalificadoAt(LocalDateTime.now().minusDays(3));
+        entrega.setCalificadoPor(calificadorOriginal);
+
+        LocalDateTime calificadoAtPrevio = entrega.getCalificadoAt();
+
+        CalificarEntregaRequest request = new CalificarEntregaRequest(
+                new BigDecimal("90.00"), "Correccion"
+        );
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
+                .thenReturn(Optional.of(entrega));
+        when(usuarioRepository.findById(docenteDuenoId)).thenReturn(Optional.of(docente));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId))
+                .thenReturn(Optional.of(matriculaMock));
+        when(entregaMapper.toResponse(entrega)).thenReturn(mock(EntregaResponse.class));
+
+        entregaService.calificar(entrega.getId(), request);
+
+        assertThat(entrega.getCalificadoAt()).isAfter(calificadoAtPrevio);
+        assertThat(entrega.getCalificadoPor()).isEqualTo(docente);
+        assertThat(entrega.getNota()).isEqualByComparingTo("90.00");
     }
 }

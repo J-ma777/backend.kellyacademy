@@ -2,10 +2,7 @@ package com.kellyacademy.user.controller;
 
 import com.kellyacademy.shared.exception.ErrorResponse;
 import com.kellyacademy.support.IntegrationTestBase;
-import com.kellyacademy.user.dto.request.AsignarRolesUsuarioRequest;
-import com.kellyacademy.user.dto.request.CambiarContrasenaRequest;
-import com.kellyacademy.user.dto.request.CambiarEstadoUsuarioRequest;
-import com.kellyacademy.user.dto.request.CrearUsuarioRequest;
+import com.kellyacademy.user.dto.request.*;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
 import com.kellyacademy.user.enums.EstadoUsuario;
 import org.junit.jupiter.api.Test;
@@ -401,5 +398,106 @@ class UsuarioControllerIT extends IntegrationTestBase {
         ResponseEntity<Void> resp = delete("/api/usuarios/" + segundoAdminId, adminToken);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    // ------------------------------------------------------------------
+    // resetearContrasena (#78)
+    // ------------------------------------------------------------------
+
+    @Test
+    void resetearContrasena_comoAdmin_devuelve204() {
+        UUID usuarioId = crearEstudianteParaTests();
+
+        ResetContrasenaRequest req = new ResetContrasenaRequest("NuevaPass123");
+
+        ResponseEntity<Void> resp = post(
+                "/api/usuarios/" + usuarioId + "/reset-contrasena",
+                adminToken, req, Void.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void resetearContrasena_puedeLoguearseConNueva() {
+        UUID usuarioId = crearEstudianteParaTests();
+        String correo = "estudiante.estado.it@kellyacademy.com";
+
+        ResetContrasenaRequest req = new ResetContrasenaRequest("NuevaPass123");
+
+        post("/api/usuarios/" + usuarioId + "/reset-contrasena",
+                adminToken, req, Void.class);
+
+        // Login con la nueva contrasena funciona.
+        String token = login(correo, "NuevaPass123");
+        assertThat(token).isNotBlank();
+
+        // Login con la vieja falla con 401.
+        ResponseEntity<ErrorResponse> resp = rest.postForEntity(
+                "/auth/login",
+                new com.kellyacademy.security.auth.dto.AuthRequest() {{
+                    setCorreoElectronico(correo);
+                    setContrasena(PASSWORD);
+                }},
+                ErrorResponse.class
+        );
+        assertThat(resp.getStatusCode().value()).isEqualTo(401);
+    }
+
+    @Test
+    void resetearContrasena_comoDocente_devuelve403() {
+        UUID usuarioId = crearEstudianteParaTests();
+
+        ResetContrasenaRequest req = new ResetContrasenaRequest("NuevaPass123");
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/usuarios/" + usuarioId + "/reset-contrasena",
+                docenteDuenoToken, req, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void resetearContrasena_usuarioInexistente_devuelve404() {
+        ResetContrasenaRequest req = new ResetContrasenaRequest("NuevaPass123");
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/usuarios/" + UUID.randomUUID() + "/reset-contrasena",
+                adminToken, req, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void resetearContrasena_nuevaIgualAActual_devuelve400() {
+        UUID usuarioId = crearEstudianteParaTests();
+
+        // El estudiante tiene PASSWORD como contrasena actual.
+        ResetContrasenaRequest req = new ResetContrasenaRequest(PASSWORD);
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/usuarios/" + usuarioId + "/reset-contrasena",
+                adminToken, req, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo())
+                .isEqualTo("CONTRASENA_SIN_CAMBIOS");
+    }
+
+    @Test
+    void resetearContrasena_sinNumero_devuelve400() {
+        UUID usuarioId = crearEstudianteParaTests();
+
+        ResetContrasenaRequest req = new ResetContrasenaRequest("SoloLetras");
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/usuarios/" + usuarioId + "/reset-contrasena",
+                adminToken, req, ErrorResponse.class
+        );
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }

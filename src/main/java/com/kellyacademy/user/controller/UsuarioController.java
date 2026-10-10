@@ -84,6 +84,19 @@ public class UsuarioController {
         return ResponseEntity.noContent().build();
     }
 
+    // Reset administrativo de contrasena. Solo ADMINISTRADOR.
+    // Fuerza una contrasena nueva sin validar la actual (el admin no la conoce).
+    // El usuario afectado recibe una notificacion de tipo SISTEMA.
+    @PostMapping("/{id}/reset-contrasena")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<Void> resetearContrasena(
+            @PathVariable UUID id,
+            @Valid @RequestBody ResetContrasenaRequest request
+    ) {
+        usuarioService.resetearContrasena(id, request);
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<Void> eliminar(@PathVariable UUID id) {

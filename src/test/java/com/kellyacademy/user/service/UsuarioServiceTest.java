@@ -6,6 +6,7 @@ import com.kellyacademy.shared.exception.CorreoYaRegistradoException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
 import com.kellyacademy.user.dto.request.CambiarContrasenaRequest;
 import com.kellyacademy.user.dto.request.CrearUsuarioRequest;
+import com.kellyacademy.user.dto.request.ResetContrasenaRequest;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
 import com.kellyacademy.user.entity.Rol;
 import com.kellyacademy.user.entity.Usuario;
@@ -51,6 +52,9 @@ class UsuarioServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private com.kellyacademy.communication.service.NotificacionService notificacionService;
 
     @InjectMocks
     private UsuarioService usuarioService;
@@ -735,5 +739,154 @@ class UsuarioServiceTest {
         usuarioService.eliminar(objetivoId);
 
         verify(usuarioRepository).delete(objetivo);
+    }
+
+    // ------------------------------------------------------------------
+    // resetearContrasena (#78)
+    // ------------------------------------------------------------------
+
+    @Test
+    void resetearContrasena_exitoso_hasheaYNotifica() {
+
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = new Usuario();
+        objetivo.setId(objetivoId);
+        objetivo.setNombre("Ana");
+        objetivo.setApellido("Torres");
+        objetivo.setCorreoElectronico("ana@kelly.com");
+        objetivo.setContrasena("$2a$12$hashActual");
+        objetivo.setEstado(EstadoUsuario.ACTIVO);
+
+        ResetContrasenaRequest request = new ResetContrasenaRequest("PasswordNueva456");
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(passwordEncoder.matches("PasswordNueva456", "$2a$12$hashActual"))
+                .thenReturn(false);
+        when(passwordEncoder.encode("PasswordNueva456"))
+                .thenReturn("$2a$12$hashNuevo");
+
+        usuarioService.resetearContrasena(objetivoId, request);
+
+        assertThat(objetivo.getContrasena()).isEqualTo("$2a$12$hashNuevo");
+
+        // No se hace save() explicito: dirty checking de JPA en @Transactional.
+        verify(usuarioRepository, never()).save(any());
+
+        // Notificacion al afectado con tipo SISTEMA.
+        verify(notificacionService).crear(
+                org.mockito.ArgumentMatchers.eq(objetivoId),
+                org.mockito.ArgumentMatchers.eq(com.kellyacademy.communication.enums.TipoNotificacion.SISTEMA),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+    }
+
+    @Test
+    void resetearContrasena_usuarioInexistente_lanzaResourceNotFound() {
+
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        ResetContrasenaRequest request = new ResetContrasenaRequest("PasswordNueva456");
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> usuarioService.resetearContrasena(objetivoId, request))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(objetivoId.toString());
+
+        verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void resetearContrasena_nuevaIgualAActual_lanzaBusinessException() {
+
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = new Usuario();
+        objetivo.setId(objetivoId);
+        objetivo.setContrasena("$2a$12$hashActual");
+
+        ResetContrasenaRequest request = new ResetContrasenaRequest("Password123");
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(passwordEncoder.matches("Password123", "$2a$12$hashActual"))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> usuarioService.resetearContrasena(objetivoId, request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getCodigo()).isEqualTo("CONTRASENA_SIN_CAMBIOS");
+                    assertThat(ex.getMessage()).contains("distinta");
+                });
+
+        verify(passwordEncoder, never()).encode(any());
+        verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void resetearContrasena_propiaContrasena_permiteYNotifica() {
+
+        // Un admin puede resetear su propia contrasena por este endpoint.
+        // Caso legitimo: perdio la contrasena pero conserva un JWT valido.
+        UUID adminId = UUID.randomUUID();
+        autenticarComo(adminId, "ADMINISTRADOR");
+
+        Usuario admin = new Usuario();
+        admin.setId(adminId);
+        admin.setContrasena("$2a$12$hashAdminActual");
+
+        ResetContrasenaRequest request = new ResetContrasenaRequest("PasswordNueva456");
+
+        when(usuarioRepository.findWithRolesById(adminId))
+                .thenReturn(Optional.of(admin));
+        when(passwordEncoder.matches("PasswordNueva456", "$2a$12$hashAdminActual"))
+                .thenReturn(false);
+        when(passwordEncoder.encode("PasswordNueva456"))
+                .thenReturn("$2a$12$hashAdminNuevo");
+
+        usuarioService.resetearContrasena(adminId, request);
+
+        assertThat(admin.getContrasena()).isEqualTo("$2a$12$hashAdminNuevo");
+        verify(notificacionService).crear(
+                org.mockito.ArgumentMatchers.eq(adminId),
+                org.mockito.ArgumentMatchers.eq(com.kellyacademy.communication.enums.TipoNotificacion.SISTEMA),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+    }
+
+    @Test
+    void resetearContrasena_usuarioBloqueado_permiteResetSinCambiarEstado() {
+
+        autenticarComo(UUID.randomUUID(), "ADMINISTRADOR");
+
+        UUID objetivoId = UUID.randomUUID();
+        Usuario objetivo = new Usuario();
+        objetivo.setId(objetivoId);
+        objetivo.setContrasena("$2a$12$hashActual");
+        objetivo.setEstado(EstadoUsuario.BLOQUEADO);
+
+        ResetContrasenaRequest request = new ResetContrasenaRequest("PasswordNueva456");
+
+        when(usuarioRepository.findWithRolesById(objetivoId))
+                .thenReturn(Optional.of(objetivo));
+        when(passwordEncoder.matches("PasswordNueva456", "$2a$12$hashActual"))
+                .thenReturn(false);
+        when(passwordEncoder.encode("PasswordNueva456"))
+                .thenReturn("$2a$12$hashNuevo");
+
+        usuarioService.resetearContrasena(objetivoId, request);
+
+        // El estado no cambio: un usuario BLOQUEADO sigue BLOQUEADO.
+        assertThat(objetivo.getEstado()).isEqualTo(EstadoUsuario.BLOQUEADO);
+        assertThat(objetivo.getContrasena()).isEqualTo("$2a$12$hashNuevo");
     }
 }

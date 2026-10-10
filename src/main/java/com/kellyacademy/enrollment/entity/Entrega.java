@@ -48,4 +48,13 @@ public class Entrega extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private EstadoEntrega estado;
+
+    // Auditoria de calificacion. Nullable: null mientras la entrega no este CALIFICADA.
+    // Re-calificar sobrescribe ambos campos (coherente con nota y retroalimentacion).
+    @Column(name = "calificado_at")
+    private LocalDateTime calificadoAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "calificado_por_id")
+    private Usuario calificadoPor;
 }

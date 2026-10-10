@@ -18,6 +18,9 @@ public record EntregaResponse(
         BigDecimal nota,
         String retroalimentacion,
         EstadoEntrega estado,
+        LocalDateTime calificadoAt,
+        UUID calificadoPorId,
+        String calificadoPorNombreCompleto,
         LocalDateTime fechaCreacion,
         LocalDateTime fechaActualizacion
 ) {

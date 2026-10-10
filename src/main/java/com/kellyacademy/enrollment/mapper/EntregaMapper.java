@@ -26,6 +26,8 @@ public interface EntregaMapper {
     @Mapping(target = "estudianteId", source = "estudiante", qualifiedByName = "extraerIdUsuario")
     @Mapping(target = "estudianteNombreCompleto", source = "estudiante", qualifiedByName = "extraerNombreCompleto")
     @Mapping(target = "estudianteCorreo", source = "estudiante", qualifiedByName = "extraerCorreo")
+    @Mapping(target = "calificadoPorId", source = "calificadoPor", qualifiedByName = "extraerIdUsuario")
+    @Mapping(target = "calificadoPorNombreCompleto", source = "calificadoPor", qualifiedByName = "extraerNombreCompleto")
     EntregaResponse toResponse(Entrega entity);
 
     @Mapping(target = "tareaId", source = "tarea", qualifiedByName = "extraerIdTarea")
@@ -43,6 +45,8 @@ public interface EntregaMapper {
     @Mapping(target = "nota", ignore = true)
     @Mapping(target = "retroalimentacion", ignore = true)
     @Mapping(target = "estado", ignore = true)
+    @Mapping(target = "calificadoAt", ignore = true)
+    @Mapping(target = "calificadoPor", ignore = true)
     Entrega toEntity(CrearEntregaRequest request);
 
     @Mapping(target = "id", ignore = true)
@@ -54,6 +58,8 @@ public interface EntregaMapper {
     @Mapping(target = "nota", ignore = true)
     @Mapping(target = "retroalimentacion", ignore = true)
     @Mapping(target = "estado", ignore = true)
+    @Mapping(target = "calificadoAt", ignore = true)
+    @Mapping(target = "calificadoPor", ignore = true)
     void actualizarDesdeRequest(ActualizarEntregaRequest request, @MappingTarget Entrega entity);
 
     // Helpers

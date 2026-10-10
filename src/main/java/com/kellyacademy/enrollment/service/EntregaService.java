@@ -148,7 +148,8 @@ public class EntregaService {
     }
 
     // El DOCENTE dueno del curso de la tarea, o ADMIN, califica.
-    // Re-calificacion permitida: sobrescribe nota y retroalimentacion.
+    // Re-calificacion permitida: sobrescribe nota, retroalimentacion,
+    // calificadoAt y calificadoPor.
     // enviadoAt NO se toca (es la marca de envio, no de calificacion).
     // estado queda CALIFICADA (terminal).
     public EntregaResponse calificar(UUID id, CalificarEntregaRequest request) {
@@ -159,9 +160,13 @@ public class EntregaService {
         validarPuedeCalificar(entrega);
         validarNotaEnRango(request.nota(), entrega.getTarea());
 
+        Usuario calificador = resolverUsuarioAutenticado();
+
         entrega.setNota(request.nota());
         entrega.setRetroalimentacion(request.retroalimentacion());
         entrega.setEstado(EstadoEntrega.CALIFICADA);
+        entrega.setCalificadoAt(LocalDateTime.now(AppTime.ZONA_NEGOCIO));
+        entrega.setCalificadoPor(calificador);
 
         UUID cursoId = entrega.getTarea().getSemana().getUnidad().getCurso().getId();
         UUID estudianteId = entrega.getEstudiante().getId();
@@ -189,6 +194,14 @@ public class EntregaService {
     // ------------------------------------------------------------------------
     // VALIDACIONES
     // ------------------------------------------------------------------------
+
+    // Resuelve la entidad Usuario del autenticado. Necesario para setear
+    // calificadoPor como @ManyToOne (no basta el UUID).
+    private Usuario resolverUsuarioAutenticado() {
+        UUID id = SecurityUtils.getUsuarioAutenticadoId();
+        return usuarioRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO_USUARIO, "id", id));
+    }
 
     // DOCENTE dueno del curso de la tarea, o ADMIN.
     private void validarAutorizacionDocente(Tarea tarea) {

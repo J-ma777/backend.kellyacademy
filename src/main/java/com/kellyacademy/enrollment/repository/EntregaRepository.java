@@ -28,9 +28,10 @@ public interface EntregaRepository extends
 
     List<Entrega> findByTareaIdAndEstado(UUID tareaId, EstadoEntrega estado);
 
-    // Carga la tarea con su jerarquia completa (semana -> unidad -> curso -> docente)
-    // y el estudiante. Necesario para que EntregaMapper.toResponse lea los escalares
-    // y para validar autorizacion (docente dueno del curso) sin LazyInit.
+    // Carga la tarea con su jerarquia completa (semana -> unidad -> curso -> docente),
+    // el estudiante y el usuario que califico (si aplica). Necesario para que
+    // EntregaMapper.toResponse lea los escalares y para validar autorizacion
+    // (docente dueno del curso) sin LazyInit.
     // open-in-view=false + @ManyToOne LAZY obliga a este @EntityGraph explicito.
     @EntityGraph(attributePaths = {
             "tarea",
@@ -38,7 +39,8 @@ public interface EntregaRepository extends
             "tarea.semana.unidad",
             "tarea.semana.unidad.curso",
             "tarea.semana.unidad.curso.docente",
-            "estudiante"
+            "estudiante",
+            "calificadoPor"
     })
     @Query("SELECT e FROM Entrega e WHERE e.id = :id")
     Optional<Entrega> findWithTareaAndEstudianteById(@Param("id") UUID id);

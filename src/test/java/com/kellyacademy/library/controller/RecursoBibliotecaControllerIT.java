@@ -6,14 +6,18 @@ import com.kellyacademy.library.dto.request.ActualizarRecursoRequest;
 import com.kellyacademy.library.dto.request.CrearRecursoRequest;
 import com.kellyacademy.library.dto.response.DescargaRecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResponse;
+import com.kellyacademy.library.entity.RecursoDescarga;
+import com.kellyacademy.library.repository.RecursoDescargaRepository;
 import com.kellyacademy.shared.exception.ErrorResponse;
 import com.kellyacademy.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -21,11 +25,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class RecursoBibliotecaControllerIT extends IntegrationTestBase {
 
+    @Autowired private RecursoDescargaRepository recursoDescargaRepository;
+
     private String estudianteToken;
+    private UUID estudianteId;
 
     @BeforeEach
     void prepararEscenario() {
-        crearUsuario("Est", "Rec", "est.recurso.it@kellyacademy.com", "ESTUDIANTE");
+        estudianteId = crearUsuario("Est", "Rec", "est.recurso.it@kellyacademy.com", "ESTUDIANTE");
         estudianteToken = login("est.recurso.it@kellyacademy.com", PASSWORD);
     }
 
@@ -308,7 +315,6 @@ class RecursoBibliotecaControllerIT extends IntegrationTestBase {
                         RecursoResponse.class).getBody()
         );
 
-        // Sin token: no usamos el helper post (que exige token). Exchange crudo.
         ResponseEntity<ErrorResponse> resp = rest.exchange(
                 "/api/recursos/" + creado.id() + "/descargar",
                 org.springframework.http.HttpMethod.POST,
@@ -317,5 +323,47 @@ class RecursoBibliotecaControllerIT extends IntegrationTestBase {
         );
 
         assertThat(resp.getStatusCode().value()).isIn(401, 403);
+    }
+
+    @Test
+    void descargar_registraTrazaEnBd() {
+        RecursoResponse creado = Objects.requireNonNull(
+                post("/api/recursos", docenteDuenoToken,
+                        req("https://cdn.kelly.com/audio.mp3", null),
+                        RecursoResponse.class).getBody()
+        );
+
+        post("/api/recursos/" + creado.id() + "/descargar",
+                estudianteToken, null, DescargaRecursoResponse.class);
+
+        List<RecursoDescarga> trazas = recursoDescargaRepository.findAll().stream()
+                .filter(t -> t.getRecurso().getId().equals(creado.id()))
+                .toList();
+
+        assertThat(trazas).hasSize(1);
+        RecursoDescarga traza = trazas.get(0);
+        assertThat(traza.getRecurso().getId()).isEqualTo(creado.id());
+        assertThat(traza.getUsuario()).isNotNull();
+        assertThat(traza.getUsuario().getId()).isEqualTo(estudianteId);
+        assertThat(traza.getIp()).isNotBlank();
+        assertThat(traza.getFechaDescarga()).isNotNull();
+    }
+
+    @Test
+    void descargar_dosVeces_registraDosTrazas() {
+        RecursoResponse creado = Objects.requireNonNull(
+                post("/api/recursos", docenteDuenoToken,
+                        req("https://cdn.kelly.com/audio.mp3", null),
+                        RecursoResponse.class).getBody()
+        );
+
+        post("/api/recursos/" + creado.id() + "/descargar",
+                estudianteToken, null, DescargaRecursoResponse.class);
+        post("/api/recursos/" + creado.id() + "/descargar",
+                estudianteToken, null, DescargaRecursoResponse.class);
+
+        long total = recursoDescargaRepository.countByRecursoId(creado.id());
+
+        assertThat(total).isEqualTo(2);
     }
 }

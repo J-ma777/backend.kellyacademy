@@ -8,6 +8,7 @@ import com.kellyacademy.library.dto.response.DescargaRecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResumenResponse;
 import com.kellyacademy.library.service.RecursoBibliotecaService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -44,8 +45,10 @@ public class RecursoBibliotecaController {
     }
 
     @PostMapping("/{id}/descargar")
-    public ResponseEntity<DescargaRecursoResponse> descargar(@PathVariable UUID id) {
-        return ResponseEntity.ok(recursoService.descargar(id));
+    public ResponseEntity<DescargaRecursoResponse> descargar(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        return ResponseEntity.ok(recursoService.descargar(id, request.getRemoteAddr()));
     }
 
     @PostMapping

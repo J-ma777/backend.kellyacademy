@@ -2,6 +2,8 @@ package com.kellyacademy.attendance.controller;
 
 import com.kellyacademy.attendance.dto.request.ActualizarAsistenciaRequest;
 import com.kellyacademy.attendance.dto.request.CrearAsistenciaRequest;
+import com.kellyacademy.attendance.dto.request.CrearAsistenciasMasivasRequest;
+import com.kellyacademy.attendance.dto.request.RegistroAsistenciaItemRequest;
 import com.kellyacademy.attendance.dto.response.AsistenciaResponse;
 import com.kellyacademy.attendance.enums.EstadoAsistencia;
 import com.kellyacademy.communication.entity.Notificacion;
@@ -457,5 +459,176 @@ class AsistenciaControllerIT extends IntegrationTestBase {
         // 3. Sigue habiendo solo 1 notificacion (la de la creacion).
         assertThat(notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA))
                 .hasSize(1);
+    }
+
+    // -------- crear masivo (#63) --------
+
+    @Test
+    void crearMasivo_comoDocenteDueno_devuelve201() {
+        UUID estudiante2Id = crearUsuario(
+                "Est2", "Masivo", "est2.masivo.it@kellyacademy.com", "ESTUDIANTE");
+
+        // Matricular al segundo estudiante.
+        CrearMatriculaRequest m = new CrearMatriculaRequest(cursoId, estudiante2Id);
+        post("/api/matriculas", adminToken, m, MatriculaResponse.class);
+
+        CrearAsistenciasMasivasRequest req = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(
+                        new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null),
+                        new RegistroAsistenciaItemRequest(estudiante2Id, EstadoAsistencia.AUSENTE, "Sin aviso")
+                )
+        );
+
+        ResponseEntity<AsistenciaResponse[]> resp = post(
+                "/api/asistencias/masivo", docenteDuenoToken, req, AsistenciaResponse[].class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(resp.getBody()).hasSize(2);
+    }
+
+    @Test
+    void crearMasivo_comoDocenteAjeno_devuelve403() {
+        CrearAsistenciasMasivasRequest req = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null))
+        );
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/asistencias/masivo", docenteAjenoToken, req, ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void crearMasivo_comoEstudiante_devuelve403() {
+        CrearAsistenciasMasivasRequest req = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null))
+        );
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/asistencias/masivo", estudianteToken, req, ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void crearMasivo_registrosVacio_devuelve400() {
+        CrearAsistenciasMasivasRequest req = new CrearAsistenciasMasivasRequest(
+                claseId, List.of()
+        );
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/asistencias/masivo", docenteDuenoToken, req, ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo())
+                .isEqualTo("VALIDATION_ERROR");
+    }
+
+    @Test
+    void crearMasivo_estudianteDuplicado_devuelve400() {
+        CrearAsistenciasMasivasRequest req = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(
+                        new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null),
+                        new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.AUSENTE, null)
+                )
+        );
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/asistencias/masivo", docenteDuenoToken, req, ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo())
+                .isEqualTo("ESTUDIANTE_DUPLICADO_EN_BATCH");
+    }
+
+    @Test
+    void crearMasivo_estudianteNoMatriculado_devuelve400ConDetalle() {
+        UUID noMatriculadoId = crearUsuario(
+                "Est", "NoMatMasivo", "est.nomat.masivo@kellyacademy.com", "ESTUDIANTE");
+
+        CrearAsistenciasMasivasRequest req = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(new RegistroAsistenciaItemRequest(
+                        noMatriculadoId, EstadoAsistencia.PRESENTE, null))
+        );
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/asistencias/masivo", docenteDuenoToken, req, ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        ErrorResponse body = Objects.requireNonNull(resp.getBody());
+        assertThat(body.getCodigo()).isEqualTo("ASISTENCIAS_MASIVAS_CON_ERRORES");
+        assertThat(body.getMensaje()).contains(noMatriculadoId.toString());
+        assertThat(body.getMensaje()).contains("matriculado");
+    }
+
+    @Test
+    void crearMasivo_actualizaAsistenciaPorcentajeMatricula() {
+        CrearAsistenciasMasivasRequest req = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(new RegistroAsistenciaItemRequest(
+                        estudianteId, EstadoAsistencia.PRESENTE, null))
+        );
+
+        post("/api/asistencias/masivo", docenteDuenoToken, req, AsistenciaResponse[].class);
+
+        ResponseEntity<MatriculaResponse> respMatricula = get(
+                "/api/matriculas/" + matriculaId, adminToken, MatriculaResponse.class
+        );
+
+        assertThat(respMatricula.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(respMatricula.getBody()).asistenciaPorcentaje())
+                .isEqualByComparingTo(new BigDecimal("100.00"));
+    }
+
+    @Test
+    void crearMasivo_generaNotificacionesSoloParaEstadosNotificables() {
+        UUID estudiante2Id = crearUsuario(
+                "Est2", "NotifMasivo", "est2.notif.masivo@kellyacademy.com", "ESTUDIANTE");
+        CrearMatriculaRequest m = new CrearMatriculaRequest(cursoId, estudiante2Id);
+        post("/api/matriculas", adminToken, m, MatriculaResponse.class);
+
+        CrearAsistenciasMasivasRequest req = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(
+                        new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null),
+                        new RegistroAsistenciaItemRequest(estudiante2Id, EstadoAsistencia.AUSENTE, null)
+                )
+        );
+
+        post("/api/asistencias/masivo", docenteDuenoToken, req, AsistenciaResponse[].class);
+
+        // PRESENTE: sin notificacion.
+        assertThat(notificacionRepository.findByUsuarioIdAndTipo(
+                estudianteId, TipoNotificacion.ASISTENCIA)).isEmpty();
+
+        // AUSENTE: 1 notificacion.
+        assertThat(notificacionRepository.findByUsuarioIdAndTipo(
+                estudiante2Id, TipoNotificacion.ASISTENCIA)).hasSize(1);
+    }
+
+    @Test
+    void crearMasivo_todoONada_noPersisteNada() {
+        CrearAsistenciasMasivasRequest req = new CrearAsistenciasMasivasRequest(
+                claseId,
+                List.of(
+                        new RegistroAsistenciaItemRequest(estudianteId, EstadoAsistencia.PRESENTE, null),
+                        new RegistroAsistenciaItemRequest(UUID.randomUUID(), EstadoAsistencia.AUSENTE, null)
+                )
+        );
+
+        ResponseEntity<ErrorResponse> resp = post(
+                "/api/asistencias/masivo", docenteDuenoToken, req, ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+        // Verificar que el primer estudiante (que si era valido) NO tiene asistencia.
+        ResponseEntity<String> listado = get(
+                "/api/asistencias?claseId=" + claseId, docenteDuenoToken, String.class);
+        assertThat(listado.getBody()).contains("\"totalElements\":0");
     }
 }

@@ -1,5 +1,7 @@
 package com.kellyacademy.user.service;
 
+import com.kellyacademy.communication.enums.TipoNotificacion;
+import com.kellyacademy.communication.service.NotificacionService;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.CorreoYaRegistradoException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
@@ -7,6 +9,7 @@ import com.kellyacademy.shared.util.SecurityUtils;
 import com.kellyacademy.user.dto.request.ActualizarUsuarioRequest;
 import com.kellyacademy.user.dto.request.CambiarContrasenaRequest;
 import com.kellyacademy.user.dto.request.CrearUsuarioRequest;
+import com.kellyacademy.user.dto.request.ResetContrasenaRequest;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
 import com.kellyacademy.user.dto.response.UsuarioResumenResponse;
 import com.kellyacademy.user.entity.Rol;
@@ -39,6 +42,7 @@ public class UsuarioService {
     private final RolRepository rolRepository;
     private final UsuarioMapper usuarioMapper;
     private final PasswordEncoder passwordEncoder;
+    private final NotificacionService notificacionService;
 
     @Transactional(readOnly = true)
     public Page<UsuarioResumenResponse> listar(Pageable pageable) {
@@ -219,6 +223,34 @@ public class UsuarioService {
         }
 
         usuario.setContrasena(passwordEncoder.encode(request.contrasenaNueva()));
+    }
+
+    public void resetearContrasena(UUID id, ResetContrasenaRequest request) {
+
+        Usuario usuario = usuarioRepository.findWithRolesById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+
+        // No-op: la nueva no puede ser la misma que la actual.
+        // Se compara por hash (matches), no en claro: el admin no conoce la actual.
+        if (passwordEncoder.matches(request.contrasenaNueva(), usuario.getContrasena())) {
+            throw new BusinessException(
+                    "CONTRASENA_SIN_CAMBIOS",
+                    "La contrasena nueva debe ser distinta a la actual"
+            );
+        }
+
+        usuario.setContrasena(passwordEncoder.encode(request.contrasenaNueva()));
+
+        // Notifica al afectado. Se ejecuta dentro de la misma transaccion.
+        // No excluye al admin que ejecuta (si es auto-reset, el admin se
+        // notifica a si mismo: es util como registro de la accion).
+        notificacionService.crear(
+                usuario.getId(),
+                TipoNotificacion.SISTEMA,
+                "Contrasena restablecida",
+                "Un administrador restablecio tu contrasena. Si no reconoces esta accion, contacta al soporte.",
+                "/api/usuarios/" + usuario.getId()
+        );
     }
 
     // ------------------------------------------------------------------------

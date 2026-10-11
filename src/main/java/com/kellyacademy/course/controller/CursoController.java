@@ -11,7 +11,6 @@ import com.kellyacademy.course.dto.response.UnidadResumenResponse;
 import com.kellyacademy.course.enums.EstadoCurso;
 import com.kellyacademy.course.enums.NivelCefr;
 import com.kellyacademy.course.service.CursoService;
-import com.kellyacademy.course.service.UnidadService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -31,7 +30,6 @@ import java.util.UUID;
 public class CursoController {
 
     private final CursoService cursoService;
-    private final UnidadService unidadService;
 
     @GetMapping
     public ResponseEntity<Page<CursoResumenResponse>> listar(
@@ -59,7 +57,6 @@ public class CursoController {
         return ResponseEntity.status(HttpStatus.CREATED).body(cursoService.crear(request));
     }
 
-    // Autorizacion fina (docente dueno o ADMIN) en el servicio.
     @PutMapping("/{id}")
     public ResponseEntity<CursoResponse> actualizar(
             @PathVariable UUID id,
@@ -82,7 +79,7 @@ public class CursoController {
             @PathVariable UUID id,
             @Valid @RequestBody ReordenarRequest request
     ) {
-        return ResponseEntity.ok(unidadService.reordenar(id, request));
+        return ResponseEntity.ok(cursoService.reordenarUnidades(id, request));
     }
 
     @PatchMapping("/{id}/estado")

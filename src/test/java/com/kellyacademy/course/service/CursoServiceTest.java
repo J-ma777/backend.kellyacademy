@@ -2,7 +2,9 @@ package com.kellyacademy.course.service;
 
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
 import com.kellyacademy.course.dto.request.CambiarDocenteCursoRequest;
+import com.kellyacademy.course.dto.request.ReordenarRequest;
 import com.kellyacademy.course.dto.response.CursoResponse;
+import com.kellyacademy.course.dto.response.UnidadResumenResponse;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.enums.EstadoCurso;
 import com.kellyacademy.course.enums.NivelCefr;
@@ -28,6 +30,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -51,6 +54,9 @@ class CursoServiceTest {
 
     @Mock
     private CursoMapper cursoMapper;
+
+    @Mock
+    private UnidadService unidadService;
 
     @InjectMocks
     private CursoService cursoService;
@@ -168,8 +174,8 @@ class CursoServiceTest {
                 "Desc",
                 NivelCefr.A1,
                 null,
-                LocalDate.now().plusMonths(3),  // inicio despues del fin
-                LocalDate.now().plusDays(1),    // fin antes del inicio
+                LocalDate.now().plusMonths(3),
+                LocalDate.now().plusDays(1),
                 30
         );
 
@@ -224,8 +230,6 @@ class CursoServiceTest {
         assertThat(resultado.estado()).isEqualTo(EstadoCurso.BORRADOR);
         assertThat(resultado.titulo()).isEqualTo(request.titulo());
 
-        // Verificacion de argumento pasado a save() via ArgumentCaptor en lugar de argThat.
-        // Mejora el debugging: si falla, el assert dice cual propiedad fallo, no un error generico.
         ArgumentCaptor<Curso> captor = ArgumentCaptor.forClass(Curso.class);
         verify(cursoRepository).save(captor.capture());
 
@@ -253,7 +257,7 @@ class CursoServiceTest {
 
         Curso curso = new Curso();
         curso.setId(UUID.randomUUID());
-        curso.setDocente(docenteConRol());  // docente original, no el autenticado
+        curso.setDocente(docenteConRol());
 
         UUID cursoId = curso.getId();
 
@@ -399,10 +403,6 @@ class CursoServiceTest {
         verify(cursoRepository).delete(curso);
     }
 
-    // ------------------------------------------------------------------
-    // cambiarEstado
-    // ------------------------------------------------------------------
-
     @Test
     void cambiarEstado_cursoInexistente_lanzaResourceNotFoundException() {
 
@@ -517,8 +517,26 @@ class CursoServiceTest {
                 });
     }
 
-    // Helper local para construir CursoResponse con solo lo que estos tests necesitan.
-    // No usa mocks del mapper: solo necesita un objeto con el estado correcto.
+    // ------------------------------------------------------------------
+    // #83 - reordenarUnidades (delegado a UnidadService)
+    // ------------------------------------------------------------------
+
+    @Test
+    void reordenarUnidades_delegaEnUnidadService() {
+        UUID cursoId = UUID.randomUUID();
+        ReordenarRequest request = new ReordenarRequest(List.of(
+                new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1)
+        ));
+        List<UnidadResumenResponse> esperado = List.of();
+
+        when(unidadService.reordenar(cursoId, request)).thenReturn(esperado);
+
+        List<UnidadResumenResponse> resultado = cursoService.reordenarUnidades(cursoId, request);
+
+        assertThat(resultado).isSameAs(esperado);
+        verify(unidadService).reordenar(cursoId, request);
+    }
+
     private CursoResponse responseConEstado(UUID cursoId, EstadoCurso estado) {
         return new CursoResponse(
                 cursoId, null, "Curso", "Desc",

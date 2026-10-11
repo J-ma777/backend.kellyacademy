@@ -3,6 +3,7 @@ package com.kellyacademy.course.service;
 import com.kellyacademy.course.dto.request.ActualizarUnidadRequest;
 import com.kellyacademy.course.dto.request.CrearUnidadRequest;
 import com.kellyacademy.course.dto.request.ReordenarRequest;
+import com.kellyacademy.course.dto.response.SemanaResumenResponse;
 import com.kellyacademy.course.dto.response.UnidadResponse;
 import com.kellyacademy.course.dto.response.UnidadResumenResponse;
 import com.kellyacademy.course.entity.Curso;
@@ -33,6 +34,7 @@ public class UnidadService {
     private final CursoRepository cursoRepository;
     private final SemanaRepository semanaRepository;
     private final UnidadMapper unidadMapper;
+    private final SemanaService semanaService;
     private static final String RECURSO = "Unidad";
     private static final String RECURSO_CURSO = "Curso";
 
@@ -132,6 +134,13 @@ public class UnidadService {
         return unidadRepository.findByCursoIdOrderByNumeroAsc(cursoId).stream()
                 .map(unidadMapper::toResumenResponse)
                 .toList();
+    }
+
+    // Punto de entrada delegado para reordenar semanas desde el recurso Unidad.
+    // La logica real (lock pesimista sobre la unidad, validacion de orden, dos
+    // pasadas) vive en SemanaService.reordenar. Misma transaccion (REQUIRED).
+    public List<SemanaResumenResponse> reordenarSemanas(UUID unidadId, ReordenarRequest request) {
+        return semanaService.reordenar(unidadId, request);
     }
 
     public void eliminar(UUID id) {

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -347,6 +348,66 @@ class RecursoBibliotecaControllerIT extends IntegrationTestBase {
         assertThat(traza.getUsuario().getId()).isEqualTo(estudianteId);
         assertThat(traza.getIp()).isNotBlank();
         assertThat(traza.getFechaDescarga()).isNotNull();
+    }
+
+    @Test
+    void descargar_conIpCloudflare_registraIpReal() {
+        RecursoResponse creado = crearRecursoDescargable();
+
+        descargarConHeaders(creado.id(), "198.51.100.24", null);
+
+        assertThat(ultimaTraza(creado.id()).getIp()).isEqualTo("198.51.100.24");
+    }
+
+    @Test
+    void descargar_sinIpCloudflare_registraPrimeraIpDeForwardedFor() {
+        RecursoResponse creado = crearRecursoDescargable();
+
+        descargarConHeaders(creado.id(), null, "198.51.100.25, 203.0.113.8");
+
+        assertThat(ultimaTraza(creado.id()).getIp()).isEqualTo("198.51.100.25");
+    }
+
+    @Test
+    void descargar_sinHeaders_registraIpRemota() {
+        RecursoResponse creado = crearRecursoDescargable();
+
+        descargarConHeaders(creado.id(), null, null);
+
+        assertThat(ultimaTraza(creado.id()).getIp()).isNotBlank();
+    }
+
+    private RecursoResponse crearRecursoDescargable() {
+        return Objects.requireNonNull(
+                post("/api/recursos", docenteDuenoToken,
+                        req("https://cdn.kelly.com/audio.mp3", null),
+                        RecursoResponse.class).getBody()
+        );
+    }
+
+    private void descargarConHeaders(UUID recursoId, String ipCloudflare, String forwardedFor) {
+        HttpHeaders headers = headersConToken(estudianteToken);
+        if (ipCloudflare != null) {
+            headers.set("CF-Connecting-IP", ipCloudflare);
+        }
+        if (forwardedFor != null) {
+            headers.set("X-Forwarded-For", forwardedFor);
+        }
+
+        ResponseEntity<DescargaRecursoResponse> response = rest.exchange(
+                "/api/recursos/" + recursoId + "/descargar",
+                org.springframework.http.HttpMethod.POST,
+                new HttpEntity<>(null, headers),
+                DescargaRecursoResponse.class
+        );
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    private RecursoDescarga ultimaTraza(UUID recursoId) {
+        return recursoDescargaRepository.findAll().stream()
+                .filter(t -> t.getRecurso().getId().equals(recursoId))
+                .findFirst()
+                .orElseThrow();
     }
 
     @Test

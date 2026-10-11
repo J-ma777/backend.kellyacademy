@@ -48,7 +48,27 @@ public class RecursoBibliotecaController {
     public ResponseEntity<DescargaRecursoResponse> descargar(
             @PathVariable UUID id,
             HttpServletRequest request) {
-        return ResponseEntity.ok(recursoService.descargar(id, request.getRemoteAddr()));
+        return ResponseEntity.ok(recursoService.descargar(id, obtenerIpCliente(request)));
+    }
+
+    /*
+     Cloudflare establece CF-Connecting-IP con la IP real del cliente.
+     */
+    private String obtenerIpCliente(HttpServletRequest request) {
+        String ipCloudflare = request.getHeader("CF-Connecting-IP");
+        if (ipCloudflare != null && !ipCloudflare.isBlank()) {
+            return ipCloudflare.trim();
+        }
+
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            String primeraIp = forwardedFor.split(",")[0].trim();
+            if (!primeraIp.isBlank()) {
+                return primeraIp;
+            }
+        }
+
+        return request.getRemoteAddr();
     }
 
     @PostMapping

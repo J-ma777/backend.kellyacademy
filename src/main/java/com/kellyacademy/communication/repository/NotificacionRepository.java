@@ -46,4 +46,9 @@ public interface NotificacionRepository extends
     @Override
     @EntityGraph(attributePaths = {"usuario"})
     Page<Notificacion> findAll(@Nullable Specification<Notificacion> spec, Pageable pageable);
+
+    // Deduplicacion de notificaciones por (link, cuerpo). Usado por
+    // AsistenciaService para no re-notificar el mismo estado cuando el docente
+    // corrige la asistencia varias veces. Query de existencia: no trae la entidad.
+    boolean existsByLinkAndCuerpo(String link, String cuerpo);
 }

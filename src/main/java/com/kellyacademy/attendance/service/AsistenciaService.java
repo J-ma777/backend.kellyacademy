@@ -12,6 +12,7 @@ import com.kellyacademy.attendance.mapper.AsistenciaMapper;
 import com.kellyacademy.attendance.repository.AsistenciaRepository;
 import com.kellyacademy.attendance.specification.AsistenciaSpecifications;
 import com.kellyacademy.communication.enums.TipoNotificacion;
+import com.kellyacademy.communication.repository.NotificacionRepository;
 import com.kellyacademy.communication.service.NotificacionService;
 import com.kellyacademy.course.entity.Clase;
 import com.kellyacademy.course.repository.ClaseRepository;
@@ -59,6 +60,7 @@ public class AsistenciaService {
     private final AsistenciaMapper asistenciaMapper;
     private final CalculoMatriculaService calculoMatriculaService;
     private final NotificacionService notificacionService;
+    private final NotificacionRepository notificacionRepository;
 
     // -------- listar --------
 
@@ -146,7 +148,7 @@ public class AsistenciaService {
                 .ifPresent(m -> calculoMatriculaService.recalcular(m.getId()));
 
         if (esNotificable(guardada.getEstado())) {
-            notificarCambioAsistencia(guardada);
+            notificarCambioAsistenciaSiCorresponde(guardada);
         }
 
         return asistenciaMapper.toResponse(guardada);
@@ -222,7 +224,7 @@ public class AsistenciaService {
         //    crearBatch es package-private en communication y no accesible aqui.
         for (Asistencia asistencia : guardadas) {
             if (esNotificable(asistencia.getEstado())) {
-                notificarCambioAsistencia(asistencia);
+                notificarCambioAsistenciaSiCorresponde(asistencia);
             }
         }
 
@@ -250,7 +252,7 @@ public class AsistenciaService {
 
         EstadoAsistencia estadoNuevo = asistencia.getEstado();
         if (!estadoNuevo.equals(estadoAnterior) && esNotificable(estadoNuevo)) {
-            notificarCambioAsistencia(asistencia);
+            notificarCambioAsistenciaSiCorresponde(asistencia);
         }
 
         return asistenciaMapper.toResponse(asistencia);
@@ -353,13 +355,25 @@ public class AsistenciaService {
                 || estado == EstadoAsistencia.JUSTIFICADO;
     }
 
-    private void notificarCambioAsistencia(Asistencia asistencia) {
+    // Deduplicacion (#87): si ya existe una notificacion con el mismo link
+    // (identifica la asistencia) y el mismo cuerpo (identifica el estado +
+    // contexto), no se crea una nueva. Resuelve el caso AUSENTE -> TARDE ->
+    // AUSENTE, donde la vuelta al estado original generaba una notificacion
+    // duplicada respecto a la de la creacion.
+    private void notificarCambioAsistenciaSiCorresponde(Asistencia asistencia) {
+        String link = "/api/asistencias/" + asistencia.getId();
+        String cuerpoNuevo = construirCuerpoNotificacion(asistencia);
+
+        if (notificacionRepository.existsByLinkAndCuerpo(link, cuerpoNuevo)) {
+            return;
+        }
+
         notificacionService.crear(
                 asistencia.getEstudiante().getId(),
                 TipoNotificacion.ASISTENCIA,
                 "Asistencia registrada",
-                construirCuerpoNotificacion(asistencia),
-                "/api/asistencias/" + asistencia.getId()
+                cuerpoNuevo,
+                link
         );
     }
 

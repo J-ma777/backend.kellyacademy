@@ -215,6 +215,7 @@
 						<include>**/*IT.java</include>
 					</includes>
 					<failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+					<argLine>-javaagent:&quot;${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar&quot;</argLine>
 				</configuration>
 			</plugin>
 		</plugins>

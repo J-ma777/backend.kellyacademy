@@ -631,4 +631,59 @@ class AsistenciaControllerIT extends IntegrationTestBase {
                 "/api/asistencias?claseId=" + claseId, docenteDuenoToken, String.class);
         assertThat(listado.getBody()).contains("\"totalElements\":0");
     }
+
+    // -------- #87: deduplicacion de notificaciones --------
+
+    @Test
+    void actualizar_cuandoVuelveAEstadoYaNotificado_noGeneraNotificacionDuplicada() {
+        // 1. Crear AUSENTE: genera 1 notificacion.
+        CrearAsistenciaRequest req = new CrearAsistenciaRequest(
+                claseId, estudianteId, EstadoAsistencia.AUSENTE, null
+        );
+        AsistenciaResponse creada = Objects.requireNonNull(
+                post("/api/asistencias", docenteDuenoToken, req, AsistenciaResponse.class).getBody()
+        );
+        UUID asistenciaId = creada.id();
+
+        assertThat(notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA))
+                .hasSize(1);
+
+        // 2. Actualizar a TARDE: genera 1 notificacion (cuerpo distinto).
+        put("/api/asistencias/" + asistenciaId, docenteDuenoToken,
+                new ActualizarAsistenciaRequest(EstadoAsistencia.TARDE, null),
+                AsistenciaResponse.class);
+
+        assertThat(notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA))
+                .hasSize(2);
+
+        // 3. Volver a AUSENTE: ya existe notificacion con ese cuerpo -> NO duplica.
+        put("/api/asistencias/" + asistenciaId, docenteDuenoToken,
+                new ActualizarAsistenciaRequest(EstadoAsistencia.AUSENTE, null),
+                AsistenciaResponse.class);
+
+        assertThat(notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA))
+                .hasSize(2);
+    }
+
+    @Test
+    void actualizar_cuandoCambiaAEstadoNoNotificadoPreviamente_generaNotificacion() {
+        // 1. Crear AUSENTE: 1 notificacion.
+        CrearAsistenciaRequest req = new CrearAsistenciaRequest(
+                claseId, estudianteId, EstadoAsistencia.AUSENTE, null
+        );
+        AsistenciaResponse creada = Objects.requireNonNull(
+                post("/api/asistencias", docenteDuenoToken, req, AsistenciaResponse.class).getBody()
+        );
+        UUID asistenciaId = creada.id();
+
+        // 2. Cambiar a JUSTIFICADO: estado notificable no notificado antes -> 1 nueva.
+        put("/api/asistencias/" + asistenciaId, docenteDuenoToken,
+                new ActualizarAsistenciaRequest(EstadoAsistencia.JUSTIFICADO, "Certificado"),
+                AsistenciaResponse.class);
+
+        List<Notificacion> notificaciones =
+                notificacionRepository.findByUsuarioIdAndTipo(estudianteId, TipoNotificacion.ASISTENCIA);
+
+        assertThat(notificaciones).hasSize(2);
+    }
 }

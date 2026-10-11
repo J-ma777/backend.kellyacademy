@@ -10,6 +10,7 @@ import com.kellyacademy.attendance.enums.EstadoAsistencia;
 import com.kellyacademy.attendance.mapper.AsistenciaMapper;
 import com.kellyacademy.attendance.repository.AsistenciaRepository;
 import com.kellyacademy.communication.enums.TipoNotificacion;
+import com.kellyacademy.communication.repository.NotificacionRepository;
 import com.kellyacademy.communication.service.NotificacionService;
 import com.kellyacademy.course.entity.Clase;
 import com.kellyacademy.course.entity.Curso;
@@ -57,6 +58,7 @@ class AsistenciaServiceTest {
     @Mock private AsistenciaMapper asistenciaMapper;
     @Mock private CalculoMatriculaService calculoMatriculaService;
     @Mock private NotificacionService notificacionService;
+    @Mock private NotificacionRepository notificacionRepository;
 
     @InjectMocks private AsistenciaService asistenciaService;
 
@@ -815,5 +817,127 @@ class AsistenciaServiceTest {
         asistenciaService.crearMasivo(request);
 
         verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
+    }
+
+    // ------------------------------------------------------------------
+    // #87: deduplicacion de notificaciones de asistencia
+    // ------------------------------------------------------------------
+
+    @Test
+    void actualizar_cuandoVuelveAEstadoYaNotificado_noNotifica() {
+        autenticarComo(docente);
+
+        UUID asistenciaId = UUID.randomUUID();
+        Asistencia asistencia = new Asistencia();
+        asistencia.setId(asistenciaId);
+        asistencia.setClase(clase);
+        asistencia.setEstudiante(estudiante);
+        asistencia.setEstado(EstadoAsistencia.TARDE); // estado anterior
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        // El docente vuelve a AUSENTE, estado que ya se notifico al crear.
+        ActualizarAsistenciaRequest request = new ActualizarAsistenciaRequest(
+                EstadoAsistencia.AUSENTE, null
+        );
+
+        when(asistenciaRepository.findWithClaseAndEstudianteById(asistenciaId)).thenReturn(Optional.of(asistencia));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
+        when(asistenciaMapper.toResponse(asistencia)).thenReturn(mock(AsistenciaResponse.class));
+
+        doAnswer(inv -> {
+            asistencia.setEstado(EstadoAsistencia.AUSENTE);
+            return null;
+        }).when(asistenciaMapper).actualizarDesdeRequest(request, asistencia);
+
+        // Simula que ya existe una notificacion con el mismo (link, cuerpo).
+        when(notificacionRepository.existsByLinkAndCuerpo(any(String.class), any(String.class)))
+                .thenReturn(true);
+
+        asistenciaService.actualizar(asistenciaId, request);
+
+        // El estado cambio a un estado notificable, pero ya existia notificacion
+        // previa con el mismo cuerpo -> no se crea una nueva.
+        verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void crear_cuandoYaExisteNotificacionConMismoCuerpo_noNotifica() {
+        autenticarComo(docente);
+
+        CrearAsistenciaRequest request = new CrearAsistenciaRequest(
+                claseId, estudianteId, EstadoAsistencia.AUSENTE, null
+        );
+
+        Asistencia guardada = new Asistencia();
+        guardada.setId(UUID.randomUUID());
+        guardada.setClase(clase);
+        guardada.setEstudiante(estudiante);
+        guardada.setEstado(EstadoAsistencia.AUSENTE);
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        when(claseRepository.findWithSemanaCursoDocenteById(claseId)).thenReturn(Optional.of(clase));
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(true);
+        when(asistenciaRepository.findByClaseIdAndEstudianteId(claseId, estudianteId)).thenReturn(Optional.empty());
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
+        when(asistenciaMapper.toEntity(request)).thenReturn(new Asistencia());
+        when(asistenciaRepository.save(any(Asistencia.class))).thenReturn(guardada);
+        when(asistenciaMapper.toResponse(guardada)).thenReturn(mock(AsistenciaResponse.class));
+
+        // Defensivo: aunque la asistencia es nueva, si por alguna razon ya existe
+        // una notificacion con el mismo (link, cuerpo), no se duplica.
+        when(notificacionRepository.existsByLinkAndCuerpo(any(String.class), any(String.class)))
+                .thenReturn(true);
+
+        asistenciaService.crear(request);
+
+        verify(notificacionService, never()).crear(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void actualizar_cuandoCambiaAEstadoNoNotificadoPreviamente_notifica() {
+        autenticarComo(docente);
+
+        UUID asistenciaId = UUID.randomUUID();
+        Asistencia asistencia = new Asistencia();
+        asistencia.setId(asistenciaId);
+        asistencia.setClase(clase);
+        asistencia.setEstudiante(estudiante);
+        asistencia.setEstado(EstadoAsistencia.AUSENTE); // estado anterior
+
+        Matricula matriculaMock = new Matricula();
+        matriculaMock.setId(UUID.randomUUID());
+
+        // Cambia a TARDE, estado que NO se habia notificado antes.
+        ActualizarAsistenciaRequest request = new ActualizarAsistenciaRequest(
+                EstadoAsistencia.TARDE, null
+        );
+
+        when(asistenciaRepository.findWithClaseAndEstudianteById(asistenciaId)).thenReturn(Optional.of(asistencia));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matriculaMock));
+        when(asistenciaMapper.toResponse(asistencia)).thenReturn(mock(AsistenciaResponse.class));
+
+        doAnswer(inv -> {
+            asistencia.setEstado(EstadoAsistencia.TARDE);
+            return null;
+        }).when(asistenciaMapper).actualizarDesdeRequest(request, asistencia);
+
+        // No existe notificacion previa con ese (link, cuerpo).
+        when(notificacionRepository.existsByLinkAndCuerpo(any(String.class), any(String.class)))
+                .thenReturn(false);
+
+        asistenciaService.actualizar(asistenciaId, request);
+
+        verify(notificacionService).crear(
+                eq(estudianteId),
+                eq(TipoNotificacion.ASISTENCIA),
+                eq("Asistencia registrada"),
+                any(String.class),
+                eq("/api/asistencias/" + asistenciaId)
+        );
     }
 }

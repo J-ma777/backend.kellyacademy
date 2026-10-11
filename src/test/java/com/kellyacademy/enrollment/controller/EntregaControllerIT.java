@@ -437,4 +437,38 @@ class EntregaControllerIT extends IntegrationTestBase {
         assertThat(body.calificadoAt()).isAfter(calificadoAtPrimera);
         assertThat(body.calificadoPorId()).isNotEqualTo(docenteDuenoId); // ahora es admin
     }
+
+    // -------- actualizar sin urlArchivo (SLICE #77) --------
+
+    @Test
+    void actualizar_sinUrlArchivo_devuelve200() {
+        CrearEntregaRequest crearReq = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, crearReq, EntregaResponse.class).getBody()).id();
+
+        ActualizarEntregaRequest actReq = new ActualizarEntregaRequest(null);
+        ResponseEntity<EntregaResponse> resp =
+                put("/api/entregas/" + entregaId, estudianteToken, actReq, EntregaResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Objects.requireNonNull(resp.getBody()).urlArchivo()).isNull();
+    }
+
+    @Test
+    void actualizar_urlInvalida_devuelve400() {
+        CrearEntregaRequest crearReq = new CrearEntregaRequest(
+                tareaId, estudianteId, "https://example.com/archivo.pdf"
+        );
+        UUID entregaId = Objects.requireNonNull(
+                post("/api/entregas", docenteDuenoToken, crearReq, EntregaResponse.class).getBody()).id();
+
+        ActualizarEntregaRequest actReq = new ActualizarEntregaRequest("no-es-url");
+        ResponseEntity<ErrorResponse> resp =
+                put("/api/entregas/" + entregaId, estudianteToken, actReq, ErrorResponse.class);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(Objects.requireNonNull(resp.getBody()).getCodigo()).isEqualTo("URL_INVALIDA");
+    }
 }

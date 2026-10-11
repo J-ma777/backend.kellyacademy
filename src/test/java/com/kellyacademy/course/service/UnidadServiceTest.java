@@ -2,6 +2,7 @@ package com.kellyacademy.course.service;
 
 import com.kellyacademy.course.dto.request.CrearUnidadRequest;
 import com.kellyacademy.course.dto.request.ReordenarRequest;
+import com.kellyacademy.course.dto.response.SemanaResumenResponse;
 import com.kellyacademy.course.dto.response.UnidadResumenResponse;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.entity.Unidad;
@@ -55,6 +56,9 @@ class UnidadServiceTest {
 
     @Mock
     private UnidadMapper unidadMapper;
+
+    @Mock
+    private SemanaService semanaService;
 
     @InjectMocks
     private UnidadService unidadService;
@@ -345,6 +349,26 @@ class UnidadServiceTest {
         assertThatThrownBy(() -> unidadService.reordenar(curso.getId(), new ReordenarRequest(List.of(
                 new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1)
         )))).isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ------------------------------------------------------------------
+    // #83 - reordenarSemanas (delegado a SemanaService)
+    // ------------------------------------------------------------------
+
+    @Test
+    void reordenarSemanas_delegaEnSemanaService() {
+        UUID unidadId = UUID.randomUUID();
+        ReordenarRequest request = new ReordenarRequest(List.of(
+                new ReordenarRequest.ItemOrden(UUID.randomUUID(), 1)
+        ));
+        List<SemanaResumenResponse> esperado = List.of();
+
+        when(semanaService.reordenar(unidadId, request)).thenReturn(esperado);
+
+        List<SemanaResumenResponse> resultado = unidadService.reordenarSemanas(unidadId, request);
+
+        assertThat(resultado).isSameAs(esperado);
+        verify(semanaService).reordenar(unidadId, request);
     }
 
     private Unidad unidad(Curso curso, int numero) {

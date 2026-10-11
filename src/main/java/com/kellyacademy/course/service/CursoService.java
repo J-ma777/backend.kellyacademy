@@ -3,8 +3,10 @@ package com.kellyacademy.course.service;
 import com.kellyacademy.course.dto.request.ActualizarCursoRequest;
 import com.kellyacademy.course.dto.request.CambiarDocenteCursoRequest;
 import com.kellyacademy.course.dto.request.CrearCursoRequest;
+import com.kellyacademy.course.dto.request.ReordenarRequest;
 import com.kellyacademy.course.dto.response.CursoResponse;
 import com.kellyacademy.course.dto.response.CursoResumenResponse;
+import com.kellyacademy.course.dto.response.UnidadResumenResponse;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.enums.EstadoCurso;
 import com.kellyacademy.course.enums.NivelCefr;
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.data.jpa.domain.Specification.allOf;
@@ -39,6 +42,7 @@ public class CursoService {
     private final CursoRepository cursoRepository;
     private final UsuarioRepository usuarioRepository;
     private final CursoMapper cursoMapper;
+    private final UnidadService unidadService;
     private static final String RECURSO = "Curso";
     private static final String RECURSO_USUARIO = "Usuario";
 
@@ -50,9 +54,6 @@ public class CursoService {
             String titulo,
             Pageable pageable
     ) {
-        // El @EntityGraph declarado en CursoRepository.findAll(Spec, Pageable) trae el
-        // docente en la misma query. Sin el, el mapper dispararia N+1 al leer
-        // curso.getDocente().getId() por cada fila (docente es LAZY, open-in-view=false).
         Specification<Curso> spec = allOf(
                 CursoSpecifications.porEstado(estado),
                 CursoSpecifications.porNivelCefr(nivelCefr),
@@ -86,7 +87,6 @@ public class CursoService {
 
         Curso guardado = cursoRepository.save(curso);
 
-        // Recargamos con @EntityGraph para que el mapper lea el docente sin LazyInit.
         return cursoMapper.toResponse(
                 cursoRepository.findWithDocenteById(guardado.getId()).orElseThrow()
         );
@@ -111,8 +111,8 @@ public class CursoService {
 
         if (curso.getDocente().getId().equals(request.docenteId())) {
             throw new BusinessException(
-                "CURSO_DOCENTE_SIN_CAMBIOS",
-                "El curso ya tiene asignado ese docente"
+                    "CURSO_DOCENTE_SIN_CAMBIOS",
+                    "El curso ya tiene asignado ese docente"
             );
         }
 
@@ -123,6 +123,15 @@ public class CursoService {
         curso.setDocente(docente);
 
         return cursoMapper.toResponse(curso);
+    }
+
+    // Punto de entrada delegado para reordenar unidades desde el recurso Curso.
+    // La logica real (lock pesimista, validacion de orden, dos pasadas) vive en
+    // UnidadService.reordenar: ahi esta la entidad operada. Misma transaccion
+    // (propagacion REQUIRED default). No autoriza aca: la autorizacion es sobre
+    // el curso de las unidades y ya la hace UnidadService.
+    public List<UnidadResumenResponse> reordenarUnidades(UUID cursoId, ReordenarRequest request) {
+        return unidadService.reordenar(cursoId, request);
     }
 
     public void eliminar(UUID id) {
@@ -163,11 +172,6 @@ public class CursoService {
         return cursoMapper.toResponse(curso);
     }
 
-    // Maquina de estados:
-    //   BORRADOR  -> ACTIVO, ARCHIVADO
-    //   ACTIVO    -> FINALIZADO, ARCHIVADO
-    //   FINALIZADO -> ARCHIVADO
-    //   ARCHIVADO  -> (terminal)
     private void validarTransicionEstado(EstadoCurso actual, EstadoCurso nuevo) {
         boolean permitida = switch (actual) {
             case BORRADOR -> nuevo == EstadoCurso.ACTIVO || nuevo == EstadoCurso.ARCHIVADO;
@@ -184,7 +188,6 @@ public class CursoService {
         }
     }
 
-    // Autorizacion fina: solo el docente dueno del curso o un ADMIN pueden modificar/eliminar.
     private void validarPropietarioOAdmin(Curso curso) {
         if (SecurityUtils.esAdmin()) {
             return;

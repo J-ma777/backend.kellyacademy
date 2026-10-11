@@ -7,7 +7,6 @@ import com.kellyacademy.course.dto.response.UnidadResponse;
 import com.kellyacademy.course.dto.response.UnidadResumenResponse;
 import com.kellyacademy.course.dto.response.SemanaResumenResponse;
 import com.kellyacademy.course.service.UnidadService;
-import com.kellyacademy.course.service.SemanaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,9 +30,7 @@ import java.util.UUID;
 public class UnidadController {
 
     private final UnidadService unidadService;
-    private final SemanaService semanaService;
 
-    // Listado por curso: sin paginacion, las unidades de un curso son pocas (4-8 tipico).
     @GetMapping
     public ResponseEntity<List<UnidadResumenResponse>> listar(
             @RequestParam(required = false) UUID cursoId
@@ -46,7 +43,6 @@ public class UnidadController {
         return ResponseEntity.ok(unidadService.obtener(id));
     }
 
-    // Autorizacion fina (docente dueno del curso o ADMIN) en el servicio.
     @PostMapping
     public ResponseEntity<UnidadResponse> crear(
             @Valid @RequestBody CrearUnidadRequest request
@@ -67,7 +63,7 @@ public class UnidadController {
             @PathVariable UUID id,
             @Valid @RequestBody ReordenarRequest request
     ) {
-        return ResponseEntity.ok(semanaService.reordenar(id, request));
+        return ResponseEntity.ok(unidadService.reordenarSemanas(id, request));
     }
 
     @DeleteMapping("/{id}")

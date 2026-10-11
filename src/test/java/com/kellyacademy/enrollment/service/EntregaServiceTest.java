@@ -519,4 +519,78 @@ class EntregaServiceTest {
         assertThat(entrega.getCalificadoPor()).isEqualTo(docente);
         assertThat(entrega.getNota()).isEqualByComparingTo("90.00");
     }
+
+    // -------- actualizar (SLICE #77: urlArchivo nullable) --------
+
+    @Test
+    void actualizar_cuandoPendienteConUrl_ok() {
+        autenticarComo(estudiante);
+
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setTarea(tarea);
+        entrega.setEstudiante(estudiante);
+        entrega.setEstado(EstadoEntrega.PENDIENTE);
+        entrega.setUrlArchivo("https://example.com/viejo.pdf");
+
+        ActualizarEntregaRequest request =
+                new ActualizarEntregaRequest("https://example.com/nuevo.pdf");
+
+        when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
+                .thenReturn(Optional.of(entrega));
+        when(entregaMapper.toResponse(entrega)).thenReturn(mock(EntregaResponse.class));
+
+        entregaService.actualizar(entrega.getId(), request);
+
+        verify(entregaMapper).actualizarDesdeRequest(request, entrega);
+        assertThat(entrega.getEnviadoAt()).isNotNull();
+        assertThat(entrega.getEstado()).isEqualTo(EstadoEntrega.PENDIENTE);
+    }
+
+    @Test
+    void actualizar_cuandoPendienteSinUrl_borraUrl() {
+        autenticarComo(estudiante);
+
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setTarea(tarea);
+        entrega.setEstudiante(estudiante);
+        entrega.setEstado(EstadoEntrega.PENDIENTE);
+        entrega.setUrlArchivo("https://example.com/viejo.pdf");
+
+        ActualizarEntregaRequest request = new ActualizarEntregaRequest(null);
+
+        when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
+                .thenReturn(Optional.of(entrega));
+        when(entregaMapper.toResponse(entrega)).thenReturn(mock(EntregaResponse.class));
+
+        entregaService.actualizar(entrega.getId(), request);
+
+        verify(entregaMapper).actualizarDesdeRequest(request, entrega);
+        assertThat(entrega.getEnviadoAt()).isNotNull();
+        assertThat(entrega.getEstado()).isEqualTo(EstadoEntrega.PENDIENTE);
+    }
+
+    @Test
+    void actualizar_cuandoUrlInvalida_lanzaBusinessException() {
+        autenticarComo(estudiante);
+
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setTarea(tarea);
+        entrega.setEstudiante(estudiante);
+        entrega.setEstado(EstadoEntrega.PENDIENTE);
+
+        ActualizarEntregaRequest request =
+                new ActualizarEntregaRequest("no-es-url");
+
+        when(entregaRepository.findWithTareaAndEstudianteById(entrega.getId()))
+                .thenReturn(Optional.of(entrega));
+
+        assertThatThrownBy(() -> entregaService.actualizar(entrega.getId(), request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("formato valido");
+
+        verify(entregaMapper, never()).actualizarDesdeRequest(any(), any());
+    }
 }

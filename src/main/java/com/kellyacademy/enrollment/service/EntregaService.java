@@ -115,7 +115,7 @@ public class EntregaService {
         validarEstudianteTieneRolEstudiante(estudiante);
         validarEstudianteMatriculado(tarea, estudiante);
         validarNoDuplicada(tarea.getId(), estudiante.getId());
-        validarUrlOpcional(request.urlArchivo()); // antes: validarUrl
+        validarUrlOpcional(request.urlArchivo());
 
         Entrega entrega = entregaMapper.toEntity(request);
         entrega.setTarea(tarea);
@@ -138,7 +138,7 @@ public class EntregaService {
 
         validarPuedeModificar(entrega);
         validarNoCalificada(entrega);
-        validarUrl(request.urlArchivo());
+        validarUrlOpcional(request.urlArchivo());
 
         entregaMapper.actualizarDesdeRequest(request, entrega);
         entrega.setEnviadoAt(LocalDateTime.now(AppTime.ZONA_NEGOCIO));
@@ -313,8 +313,8 @@ public class EntregaService {
         }
     }
 
-    // Validacion de URL obligatoria (usada por actualizar, donde el
-    // estudiante siempre sube archivo).
+    // Validacion de URL: si viene no-null, debe tener formato valido.
+    // No se llama directamente desde crear/actualizar; usar validarUrlOpcional.
     private void validarUrl(String url) {
         if (!UrlValidator.esFormatoValido(url)) {
             throw new BusinessException(
@@ -324,9 +324,12 @@ public class EntregaService {
         }
     }
 
-    // Validacion de URL opcional (usada por crear). null es valido:
-    // cubre el caso de trabajo en equipo donde el docente crea la entrega de
-    // integrantes que no suben archivo propio.
+    // Validacion de URL opcional. null es valido: en crear cubre el caso de
+    // trabajo en equipo donde el docente crea la entrega de integrantes que
+    // no suben archivo propio; en actualizar cubre el borrado de la URL
+    // (semantica de reemplazo). Si viene con valor, se valida el formato.
+    // Cadena vacia NO es valida (no es "borrar"): cae en validarUrl y falla
+    // con URL_INVALIDA.
     private void validarUrlOpcional(String url) {
         if (url == null) {
             return;

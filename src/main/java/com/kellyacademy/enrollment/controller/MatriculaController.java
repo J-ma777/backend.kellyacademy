@@ -37,6 +37,11 @@ public class MatriculaController {
         return ResponseEntity.ok(matriculaService.listar(cursoId, estudianteId, estado, pageable));
     }
 
+    @GetMapping("/mis-matriculas")
+    public ResponseEntity<java.util.List<MatriculaResponse>> listarMisMatriculas() {
+        return ResponseEntity.ok(matriculaService.listarMisMatriculas());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<MatriculaResponse> obtener(@PathVariable UUID id) {
         return ResponseEntity.ok(matriculaService.obtener(id));

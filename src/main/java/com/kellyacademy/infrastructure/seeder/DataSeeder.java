@@ -58,6 +58,8 @@ public class DataSeeder implements ApplicationRunner {
         }
 
         crearAdministrador();
+        crearProfesor();
+        crearEstudiante();
 
         log.info("Verificacion de datos semilla finalizada.");
     }
@@ -104,6 +106,7 @@ public class DataSeeder implements ApplicationRunner {
                                 p.getNombre().equals(PermisoSistema.CREAR_TAREA.name())
                                         || p.getNombre().equals(PermisoSistema.CALIFICAR_TAREA.name())
                                         || p.getNombre().equals(PermisoSistema.VER_CURSOS.name())
+                                        || p.getNombre().equals(PermisoSistema.CREAR_CURSO.name())
                                         || p.getNombre().equals(PermisoSistema.ENVIAR_MENSAJES.name()))
                         .collect(Collectors.toSet())
         );
@@ -165,5 +168,71 @@ public class DataSeeder implements ApplicationRunner {
         usuarioRepository.save(usuario);
 
         log.info("Usuario administrador creado: {}", correoAdmin);
+    }
+
+    private void crearProfesor() {
+
+        String correoDocente = "profesor@kellyacademy.com";
+
+        if (usuarioRepository.existsByCorreoElectronico(correoDocente)) {
+            log.info("Usuario docente ya existe. Saltando creacion.");
+            return;
+        }
+
+        log.info("Creando usuario docente de prueba...");
+
+        Rol rolDocente = rolRepository
+                .findByNombre("DOCENTE")
+                .orElseThrow(() ->
+                        new IllegalStateException(
+                                "Rol DOCENTE no encontrado. No se puede crear el docente."
+                        )
+                );
+
+        Usuario usuario = new Usuario();
+
+        usuario.setNombre("Kelly");
+        usuario.setApellido("Morales");
+        usuario.setCorreoElectronico(correoDocente);
+        usuario.setContrasena(passwordEncoder.encode("Profesor123*"));
+        usuario.setEstado(EstadoUsuario.ACTIVO);
+        usuario.setRoles(Set.of(rolDocente));
+
+        usuarioRepository.save(usuario);
+
+        log.info("Usuario docente creado: {}", correoDocente);
+    }
+
+    private void crearEstudiante() {
+
+        String correoEstudiante = "estudiante@kellyacademy.com";
+
+        if (usuarioRepository.existsByCorreoElectronico(correoEstudiante)) {
+            log.info("Usuario estudiante ya existe. Saltando creacion.");
+            return;
+        }
+
+        log.info("Creando usuario estudiante de prueba...");
+
+        Rol rolEstudiante = rolRepository
+                .findByNombre("ESTUDIANTE")
+                .orElseThrow(() ->
+                        new IllegalStateException(
+                                "Rol ESTUDIANTE no encontrado. No se puede crear el estudiante."
+                        )
+                );
+
+        Usuario usuario = new Usuario();
+
+        usuario.setNombre("Carlos");
+        usuario.setApellido("Mendoza");
+        usuario.setCorreoElectronico(correoEstudiante);
+        usuario.setContrasena(passwordEncoder.encode("Estudiante123*"));
+        usuario.setEstado(EstadoUsuario.ACTIVO);
+        usuario.setRoles(Set.of(rolEstudiante));
+
+        usuarioRepository.save(usuario);
+
+        log.info("Usuario estudiante creado: {}", correoEstudiante);
     }
 }

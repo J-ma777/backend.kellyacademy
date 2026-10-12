@@ -16,6 +16,9 @@ import com.kellyacademy.course.specification.CursoSpecifications;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
 import com.kellyacademy.shared.util.SecurityUtils;
+import com.kellyacademy.enrollment.entity.Matricula;
+import com.kellyacademy.enrollment.enums.EstadoMatricula;
+import com.kellyacademy.enrollment.repository.MatriculaRepository;
 import com.kellyacademy.user.entity.Usuario;
 import com.kellyacademy.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -41,10 +44,41 @@ public class CursoService {
 
     private final CursoRepository cursoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final MatriculaRepository matriculaRepository;
     private final CursoMapper cursoMapper;
     private final UnidadService unidadService;
     private static final String RECURSO = "Curso";
     private static final String RECURSO_USUARIO = "Usuario";
+
+    @Transactional(readOnly = true)
+    public List<CursoResumenResponse> listarMisCursos() {
+        UUID usuarioId = SecurityUtils.getUsuarioAutenticadoId();
+
+        List<Curso> cursosDocente = cursoRepository.findByDocenteId(usuarioId);
+        if (!cursosDocente.isEmpty()) {
+            return cursosDocente.stream()
+                    .map(cursoMapper::toResumenResponse)
+                    .toList();
+        }
+
+        List<Matricula> matriculas = matriculaRepository.findByEstudianteId(usuarioId);
+        if (!matriculas.isEmpty()) {
+            return matriculas.stream()
+                    .filter(m -> m.getEstado() == EstadoMatricula.ACTIVA)
+                    .map(Matricula::getCurso)
+                    .distinct()
+                    .map(cursoMapper::toResumenResponse)
+                    .toList();
+        }
+
+        if (SecurityUtils.esAdmin()) {
+            return cursoRepository.findAll().stream()
+                    .map(cursoMapper::toResumenResponse)
+                    .toList();
+        }
+
+        return List.of();
+    }
 
     @Transactional(readOnly = true)
     public Page<CursoResumenResponse> listar(
@@ -83,7 +117,7 @@ public class CursoService {
 
         Curso curso = cursoMapper.toEntity(request);
         curso.setDocente(docente);
-        curso.setEstado(EstadoCurso.BORRADOR);
+        curso.setEstado(EstadoCurso.ACTIVO);
 
         Curso guardado = cursoRepository.save(curso);
 

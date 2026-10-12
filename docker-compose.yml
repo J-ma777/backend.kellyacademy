@@ -1,11 +1,16 @@
 # =========================================
 # KELLY ACADEMY LMS - Docker Compose
 # =========================================
-# Levanta: PostgreSQL 18 + pgAdmin 4
+# Servicios:
+#   - postgres:  PostgreSQL 18
+#   - pgadmin:   pgAdmin 4
+#   - backend:   Kelly Academy API (Spring Boot)
+#
 # Uso:
-#   docker-compose up -d       (iniciar)
-#   docker-compose down        (detener)
-#   docker-compose down -v     (detener + borrar volumenes)
+#   docker-compose up -d --build       (Levantar todo el stack en Docker)
+#   docker-compose up -d postgres      (Levantar solo la BD para desarrollo local con IDE/Maven)
+#   docker-compose down                (Detener contenedores)
+#   docker-compose down -v             (Detener + borrar volumenes de datos)
 # =========================================
 
 services:
@@ -50,6 +55,28 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kelly-academy-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/kelly_academy
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:3000,http://localhost:5173}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - kelly-network
 
 volumes:
   postgres_data:

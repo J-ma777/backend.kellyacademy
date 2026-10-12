@@ -44,13 +44,18 @@ public class CursoController {
         );
     }
 
+    @GetMapping("/mis-cursos")
+    public ResponseEntity<List<CursoResumenResponse>> listarMisCursos() {
+        return ResponseEntity.ok(cursoService.listarMisCursos());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<CursoResponse> obtener(@PathVariable UUID id) {
         return ResponseEntity.ok(cursoService.obtener(id));
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'DOCENTE')")
     public ResponseEntity<CursoResponse> crear(
             @Valid @RequestBody CrearCursoRequest request
     ) {

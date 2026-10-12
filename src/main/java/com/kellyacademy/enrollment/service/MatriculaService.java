@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.data.jpa.domain.Specification.allOf;
@@ -61,6 +62,14 @@ public class MatriculaService {
 
         return matriculaRepository.findAll(spec, pageable)
                 .map(matriculaMapper::toResumenResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MatriculaResponse> listarMisMatriculas() {
+        UUID usuarioId = SecurityUtils.getUsuarioAutenticadoId();
+        return matriculaRepository.findByEstudianteId(usuarioId).stream()
+                .map(matriculaMapper::toResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)

@@ -31,6 +31,11 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarioService.listar(pageable));
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<UsuarioResponse> obtenerActual() {
+        return ResponseEntity.ok(usuarioService.obtener(com.kellyacademy.shared.util.SecurityUtils.getUsuarioAutenticadoId()));
+    }
+
     // Autorizacion fina (propio o admin) en el servicio: no se puede resolver con @PreAuthorize
     // de forma limpia porque depende del {id} del path.
     @GetMapping("/{id}")

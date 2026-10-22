@@ -13,6 +13,11 @@ import java.util.UUID;
 
 public interface TareaRepository extends JpaRepository<Tarea, UUID> {
 
+    boolean existsByInstruccionesUrlAndSemanaUnidadCursoIdAndPublicadoTrueAndVisibleTrue(String url, UUID cursoId);
+
+    @EntityGraph(attributePaths = {"semana"})
+    List<Tarea> findBySemanaUnidadCursoIdOrderByFechaLimiteAsc(UUID cursoId);
+
     List<Tarea> findBySemanaIdOrderByFechaLimiteAsc(UUID semanaId);
 
     List<Tarea> findByFechaLimiteBetween(LocalDateTime inicio, LocalDateTime fin);

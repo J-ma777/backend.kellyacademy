@@ -27,6 +27,9 @@ public interface EventoRepository extends
 
     List<Evento> findByCursoId(UUID cursoId);
 
+    @EntityGraph(attributePaths = {"usuario", "curso", "curso.docente"})
+    List<Evento> findByInicioBetween(LocalDateTime inicio, LocalDateTime fin);
+
     List<Evento> findByUsuarioIdAndTipo(UUID usuarioId, TipoEvento tipo);
 
     // Carga usuario y curso en la misma query. Necesario para que EventoMapper

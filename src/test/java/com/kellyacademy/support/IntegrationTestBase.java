@@ -296,6 +296,8 @@ public abstract class IntegrationTestBase {
     // (PATCH /api/cursos/{id}/estado, deuda #13 resuelta). Falla el test si el
     // endpoint devuelve un status distinto a 200.
     protected void activarCurso(UUID cursoId) {
+        // Las altas actuales ya son ACTIVO; conservar también soporte para fixtures BORRADOR.
+        if (cursoRepository.findById(cursoId).orElseThrow().getEstado() == EstadoCurso.ACTIVO) return;
         cambiarEstadoCurso(cursoId, EstadoCurso.ACTIVO);
     }
 

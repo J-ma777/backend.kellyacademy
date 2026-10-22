@@ -30,6 +30,10 @@ public record ActualizarCursoRequest(
 
         @NotNull(message = "La capacidad maxima es obligatoria")
         @Min(value = 1, message = "La capacidad maxima debe ser al menos 1")
-        Integer capacidadMaxima
+        Integer capacidadMaxima,
+        @Size(max = 21) java.util.List<@jakarta.validation.constraints.NotNull @jakarta.validation.Valid HorarioCursoRequest> horarios
 ) {
+    public ActualizarCursoRequest(String titulo, String descripcion, NivelCefr nivelCefr, String horario, LocalDate fechaInicio, LocalDate fechaFin, Integer capacidadMaxima) {
+        this(titulo, descripcion, nivelCefr, horario, fechaInicio, fechaFin, capacidadMaxima, null);
+    }
 }

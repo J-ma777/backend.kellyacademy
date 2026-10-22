@@ -8,6 +8,9 @@ public record TareaResumenResponse(
         UUID id,
         String titulo,
         LocalDateTime fechaLimite,
-        Integer puntajeMaximo
+        Integer puntajeMaximo,
+        Boolean publicado,
+        Boolean visible,
+        com.kellyacademy.course.enums.TipoActividad tipoActividad
 ) {
 }

@@ -13,6 +13,10 @@ public record AnuncioResponse(
         String cuerpo,
         Boolean activo,
         LocalDateTime fechaCreacion,
-        LocalDateTime fechaActualizacion
+        LocalDateTime fechaActualizacion,
+        Boolean publicado,
+        Boolean fijado,
+        java.time.LocalDateTime publicadoAt,
+        String imagenUrl
 ) {
 }

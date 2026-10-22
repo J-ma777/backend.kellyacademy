@@ -211,6 +211,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleUploadTooLarge(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(ErrorResponse.builder()
+                .codigo("ARCHIVO_TAMANO").mensaje("El archivo supera el máximo de 20 MB")
+                .estado(413).ruta(request.getRequestURI())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO)).build());
+    }
+
     // EXCEPCIÓN GENÉRICA (catch-all)
 
     @ExceptionHandler(Exception.class)

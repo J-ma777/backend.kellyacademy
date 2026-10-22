@@ -25,12 +25,16 @@ public interface MaterialMapper {
 
     MaterialResumenResponse toResumenResponse(Material material);
 
+    @Mapping(target = "publicado", ignore = true)
+    @Mapping(target = "visible", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "fechaCreacion", ignore = true)
     @Mapping(target = "fechaActualizacion", ignore = true)
     @Mapping(target = "semana", ignore = true)
     Material toEntity(CrearMaterialRequest request);
 
+    @Mapping(target = "publicado", ignore = true)
+    @Mapping(target = "visible", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "fechaCreacion", ignore = true)
     @Mapping(target = "fechaActualizacion", ignore = true)

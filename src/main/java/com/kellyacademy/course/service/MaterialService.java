@@ -27,6 +27,7 @@ import java.util.UUID;
 public class MaterialService {
 
     private final MaterialRepository materialRepository;
+    private final AccesoCursoService acceso;
     private final SemanaRepository semanaRepository;
     private final MaterialMapper materialMapper;
     private static final String RECURSO = "Material";
@@ -43,7 +44,9 @@ public class MaterialService {
         if (!semanaRepository.existsById(semanaId)) {
             throw new ResourceNotFoundException(RECURSO_SEMANA, "id", semanaId);
         }
+        acceso.validarSemana(semanaId);
         return materialRepository.findBySemanaId(semanaId).stream()
+                .filter(acceso::puedeVer)
                 .map(materialMapper::toResumenResponse)
                 .toList();
     }
@@ -52,6 +55,7 @@ public class MaterialService {
     public MaterialResponse obtener(UUID id) {
         Material material = materialRepository.findWithSemanaCursoDocenteById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+        acceso.validarContenido(material);
         return materialMapper.toResponse(material);
     }
 

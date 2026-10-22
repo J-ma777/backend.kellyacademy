@@ -32,8 +32,12 @@ public class Curso extends BaseEntity {
     @Column(name = "nivel_cefr", nullable = false, length = 10)
     private NivelCefr nivelCefr;
 
-    @Column(length = 200)
+    @Column(length = 1000)
     private String horario;
+
+    @OneToMany(mappedBy = "curso", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("dia ASC, horaInicio ASC")
+    private java.util.List<HorarioCurso> horarios = new java.util.ArrayList<>();
 
     @Column(name = "fecha_inicio")
     private LocalDate fechaInicio;

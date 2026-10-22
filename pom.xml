@@ -29,8 +29,24 @@
 	<properties>
 		<java.version>21</java.version>
 		<m2e.apt.activation>jdt_apt</m2e.apt.activation>
+		<jacocoArgLine/>
 	</properties>
 	<dependencies>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.57.2</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+            <version>2.57.2</version>
+        </dependency>
+		<dependency>
+			<groupId>org.jsoup</groupId>
+			<artifactId>jsoup</artifactId>
+			<version>1.23.2</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
@@ -201,10 +217,37 @@
 						<include>**/*IT.java</include>
 					</includes>
 					<failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
-					<argLine>-javaagent:&quot;${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar&quot;</argLine>
+					<argLine>@{jacocoArgLine} -javaagent:&quot;${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar&quot;</argLine>
+					<failIfNoTests>true</failIfNoTests>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.14</version>
+				<executions>
+					<execution>
+						<id>coverage-agent</id>
+						<goals><goal>prepare-agent</goal></goals>
+						<configuration><propertyName>jacocoArgLine</propertyName></configuration>
+					</execution>
+					<execution>
+						<id>coverage-report</id>
+						<phase>verify</phase>
+						<goals><goal>report</goal></goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>
+	<profiles>
+		<profile>
+			<id>evidencia</id>
+			<build>
+				<!-- Evita que la compilación automática del IDE sobrescriba clases durante la suite. -->
+				<directory>${project.basedir}/target-evidencia</directory>
+			</build>
+		</profile>
+	</profiles>
 
 </project>

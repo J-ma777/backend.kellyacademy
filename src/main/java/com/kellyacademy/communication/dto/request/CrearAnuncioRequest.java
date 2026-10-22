@@ -16,6 +16,11 @@ public record CrearAnuncioRequest(
         String titulo,
 
         @NotBlank(message = "El cuerpo es obligatorio")
-        String cuerpo
+        @Size(max = 50000) String cuerpo,
+        Boolean publicado,
+        Boolean fijado,
+        @Size(max=500) String imagenUrl
 ) {
+    public CrearAnuncioRequest(UUID cursoId, String titulo, String cuerpo) { this(cursoId, titulo, cuerpo, null, null, null); }
+    public CrearAnuncioRequest(UUID cursoId,String titulo,String cuerpo,Boolean publicado,Boolean fijado){this(cursoId,titulo,cuerpo,publicado,fijado,null);}
 }

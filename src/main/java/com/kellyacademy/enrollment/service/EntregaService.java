@@ -45,6 +45,8 @@ public class EntregaService {
     private static final String RECURSO_USUARIO = "Usuario";
     private static final String ROL_ESTUDIANTE = "ESTUDIANTE";
 
+    private final com.kellyacademy.course.service.AccesoCursoService acceso;
+    private final com.kellyacademy.storage.ArchivoAccesoService archivos;
     private final EntregaRepository entregaRepository;
     private final TareaRepository tareaRepository;
     private final UsuarioRepository usuarioRepository;
@@ -82,7 +84,14 @@ public class EntregaService {
         UUID estudianteId = SecurityUtils.getUsuarioAutenticadoId();
 
         Specification<Entrega> spec = allOf(
-                EntregaSpecifications.porEstudianteId(estudianteId)
+                EntregaSpecifications.porEstudianteId(estudianteId),
+                (root, query, cb) -> {
+                    var sub = query.subquery(UUID.class);
+                    var m = sub.from(com.kellyacademy.enrollment.entity.Matricula.class);
+                    sub.select(m.get("id")).where(cb.equal(m.get("curso").get("id"), root.get("tarea").get("semana").get("unidad").get("curso").get("id")),
+                            cb.equal(m.get("estudiante").get("id"), estudianteId), cb.notEqual(m.get("estado"), com.kellyacademy.enrollment.enums.EstadoMatricula.ABANDONADA));
+                    return cb.and(cb.isTrue(root.get("tarea").get("publicado")), cb.isTrue(root.get("tarea").get("visible")), cb.exists(sub));
+                }
         );
 
         return entregaRepository.findAll(spec, pageable)
@@ -95,6 +104,7 @@ public class EntregaService {
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarPuedeConsultar(entrega);
+        if (!SecurityUtils.esAdmin() && entrega.getEstudiante().getId().equals(SecurityUtils.getUsuarioAutenticadoId())) acceso.validarContenido(entrega.getTarea());
 
         return entregaMapper.toResponse(entrega);
     }
@@ -116,6 +126,7 @@ public class EntregaService {
         validarEstudianteMatriculado(tarea, estudiante);
         validarNoDuplicada(tarea.getId(), estudiante.getId());
         validarUrlOpcional(request.urlArchivo());
+        archivos.validarVinculo(request.urlArchivo(),tarea.getSemana().getUnidad().getCurso().getId(),com.kellyacademy.storage.ArchivoService.Destino.ENTREGA);
 
         Entrega entrega = entregaMapper.toEntity(request);
         entrega.setTarea(tarea);
@@ -137,8 +148,13 @@ public class EntregaService {
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarPuedeModificar(entrega);
+        if (!SecurityUtils.esAdmin()) {
+            acceso.validarContenido(entrega.getTarea());
+            acceso.validarEstudianteActivo(entrega.getTarea().getSemana().getUnidad().getCurso());
+        }
         validarNoCalificada(entrega);
         validarUrlOpcional(request.urlArchivo());
+        archivos.validarVinculo(request.urlArchivo(),entrega.getTarea().getSemana().getUnidad().getCurso().getId(),com.kellyacademy.storage.ArchivoService.Destino.ENTREGA);
 
         entregaMapper.actualizarDesdeRequest(request, entrega);
         entrega.setEnviadoAt(LocalDateTime.now(AppTime.ZONA_NEGOCIO));

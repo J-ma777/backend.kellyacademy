@@ -191,7 +191,7 @@ class CursoServiceTest {
     }
 
     @Test
-    void crear_exitoso_estadoBorrador() {
+    void crear_exitoso_estadoActivo() {
 
         CrearCursoRequest request = requestValido();
         Usuario docente = docenteConRol();
@@ -205,7 +205,7 @@ class CursoServiceTest {
         cursoGuardado.setId(idGenerado);
         cursoGuardado.setTitulo(request.titulo());
         cursoGuardado.setDocente(docente);
-        cursoGuardado.setEstado(EstadoCurso.BORRADOR);
+        cursoGuardado.setEstado(EstadoCurso.ACTIVO);
         cursoGuardado.setNivelCefr(request.nivelCefr());
         cursoGuardado.setCapacidadMaxima(request.capacidadMaxima());
 
@@ -216,7 +216,7 @@ class CursoServiceTest {
                 idGenerado, docenteResumen, request.titulo(), "Descripcion",
                 NivelCefr.B1, "Lunes y Miercoles 19:00",
                 request.fechaInicio(), request.fechaFin(), 30,
-                EstadoCurso.BORRADOR, null, null
+                EstadoCurso.ACTIVO, null, null
         );
 
         when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
@@ -227,14 +227,14 @@ class CursoServiceTest {
 
         CursoResponse resultado = cursoService.crear(request);
 
-        assertThat(resultado.estado()).isEqualTo(EstadoCurso.BORRADOR);
+        assertThat(resultado.estado()).isEqualTo(EstadoCurso.ACTIVO);
         assertThat(resultado.titulo()).isEqualTo(request.titulo());
 
         ArgumentCaptor<Curso> captor = ArgumentCaptor.forClass(Curso.class);
         verify(cursoRepository).save(captor.capture());
 
         Curso cursoPersistido = captor.getValue();
-        assertThat(cursoPersistido.getEstado()).isEqualTo(EstadoCurso.BORRADOR);
+        assertThat(cursoPersistido.getEstado()).isEqualTo(EstadoCurso.ACTIVO);
         assertThat(cursoPersistido.getDocente()).isSameAs(docente);
     }
 

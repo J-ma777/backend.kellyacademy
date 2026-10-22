@@ -32,6 +32,9 @@ public class Usuario extends BaseEntity {
     @Column(length = 500)
     private String avatarUrl;
 
+    @Column(length = 9)
+    private String telefono;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EstadoUsuario estado;

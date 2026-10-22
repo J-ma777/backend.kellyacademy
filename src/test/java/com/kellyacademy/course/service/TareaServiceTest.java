@@ -45,6 +45,9 @@ class TareaServiceTest {
     @Mock private SemanaRepository semanaRepository;
     @Mock private TareaMapper tareaMapper;
 
+    @Mock private AccesoCursoService acceso;
+    @Mock private com.kellyacademy.enrollment.repository.EntregaRepository entregaRepository;
+
     @InjectMocks
     private TareaService tareaService;
 

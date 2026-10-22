@@ -45,6 +45,8 @@ class MaterialServiceTest {
     @Mock private SemanaRepository semanaRepository;
     @Mock private MaterialMapper materialMapper;
 
+    @Mock private AccesoCursoService acceso;
+
     @InjectMocks
     private MaterialService materialService;
 

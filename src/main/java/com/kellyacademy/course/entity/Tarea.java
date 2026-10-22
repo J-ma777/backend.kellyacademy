@@ -1,6 +1,5 @@
 package com.kellyacademy.course.entity;
 
-import com.kellyacademy.shared.base.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -13,7 +12,11 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Entity
 @Table(name = "tareas")
-public class Tarea extends BaseEntity {
+public class Tarea extends ContenidoEntity {
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_actividad", nullable = false, length = 20)
+    private com.kellyacademy.course.enums.TipoActividad tipoActividad = com.kellyacademy.course.enums.TipoActividad.TAREA;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "semana_id", nullable = false)

@@ -60,6 +60,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UserDetails userDetails = customUserDetailsService
                         .loadUserByUsername(username);
 
+                if (!userDetails.isEnabled() || !userDetails.isAccountNonLocked()
+                        || !userDetails.isAccountNonExpired() || !userDetails.isCredentialsNonExpired()) {
+                    SecurityContextHolder.clearContext();
+                    escribirError(response, request, "ACCOUNT_DISABLED", "Tu cuenta está inactiva o suspendida.", HttpStatus.UNAUTHORIZED);
+                    return;
+                }
                 if (jwtService.esTokenValido(jwtToken, userDetails)) {
 
                     UsernamePasswordAuthenticationToken authenticationToken =
@@ -80,8 +86,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
 
-            filterChain.doFilter(request, response);
-
         } catch (ExpiredJwtException ex) {
 
             log.warn("JWT expirado para URI: {}", request.getRequestURI());
@@ -93,6 +97,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     "El token ha expirado. Por favor, inicia sesión nuevamente.",
                     HttpStatus.UNAUTHORIZED
             );
+            return;
 
         } catch (JwtException ex) {
 
@@ -105,7 +110,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     "El token proporcionado no es valido.",
                     HttpStatus.UNAUTHORIZED
             );
+            return;
 
+        } catch (org.springframework.security.core.AuthenticationException ex) {
+            SecurityContextHolder.clearContext();
+            escribirError(response, request, "INVALID_SESSION", "La sesión ya no está disponible. Inicia sesión nuevamente.", HttpStatus.UNAUTHORIZED);
+            return;
         } catch (Exception ex) {
 
             log.error("Error procesando autenticacion JWT", ex);
@@ -117,7 +127,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     "Error procesando la autenticacion.",
                     HttpStatus.INTERNAL_SERVER_ERROR
             );
+            return;
         }
+        filterChain.doFilter(request, response);
     }
 
     private void escribirError(

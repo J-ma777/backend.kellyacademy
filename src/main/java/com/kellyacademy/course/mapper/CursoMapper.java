@@ -25,6 +25,7 @@ public interface CursoMapper {
     CursoResponse toResponse(Curso curso);
 
     @Mapping(target = "docenteId", source = "docente", qualifiedByName = "extraerId")
+    @Mapping(target = "docenteNombreCompleto", source = "docente", qualifiedByName = "extraerNombreDocente")
     CursoResumenResponse toResumenResponse(Curso curso);
 
     @Mapping(target = "id", ignore = true)
@@ -32,6 +33,7 @@ public interface CursoMapper {
     @Mapping(target = "fechaActualizacion", ignore = true)
     @Mapping(target = "docente", ignore = true)
     @Mapping(target = "estado", ignore = true)
+    @Mapping(target = "horarios", ignore = true)
     Curso toEntity(CrearCursoRequest request);
 
     @Mapping(target = "id", ignore = true)
@@ -39,10 +41,16 @@ public interface CursoMapper {
     @Mapping(target = "fechaActualizacion", ignore = true)
     @Mapping(target = "docente", ignore = true)
     @Mapping(target = "estado", ignore = true)
+    @Mapping(target = "horarios", ignore = true)
     void actualizarDesdeRequest(ActualizarCursoRequest request, @MappingTarget Curso curso);
 
     @Named("extraerId")
     default UUID extraerId(Usuario usuario) {
         return usuario == null ? null : usuario.getId();
+    }
+
+    @Named("extraerNombreDocente")
+    default String extraerNombreDocente(Usuario usuario) {
+        return usuario == null ? null : (usuario.getNombre() + " " + usuario.getApellido()).trim();
     }
 }

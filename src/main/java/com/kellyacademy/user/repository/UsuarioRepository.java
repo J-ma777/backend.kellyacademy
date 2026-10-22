@@ -20,6 +20,16 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
     Optional<Usuario> findWithRolesById(@Param("id") UUID id);
 
     boolean existsByCorreoElectronico(String correoElectronico);
+    boolean existsByCorreoElectronicoIgnoreCase(String correoElectronico);
+    boolean existsByCorreoElectronicoIgnoreCaseAndIdNot(String correoElectronico, UUID id);
+
+    @EntityGraph(attributePaths = {"roles"})
+    @Query("SELECT u FROM Usuario u JOIN u.roles r WHERE r.nombre = 'ESTUDIANTE' AND SIZE(u.roles) = 1 ORDER BY u.apellido, u.nombre")
+    java.util.List<Usuario> findAlumnosGestionables();
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM Usuario u WHERE u.id = :id")
+    Optional<Usuario> findByIdForUpdate(@Param("id") UUID id);
 
     // Cuenta cuantos usuarios tienen un rol (por nombre) y estado concretos.
     // Usado por la proteccion del ultimo admin activo (#70):

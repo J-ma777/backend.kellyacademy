@@ -20,6 +20,7 @@ public class Tutoria extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "estudiante_id", nullable = false)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     private Usuario estudiante;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

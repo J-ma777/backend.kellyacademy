@@ -10,6 +10,11 @@ public record ActualizarAnuncioRequest(
         String titulo,
 
         @NotBlank(message = "El cuerpo es obligatorio")
-        String cuerpo
+        @Size(max = 50000) String cuerpo,
+        Boolean publicado,
+        Boolean fijado,
+        @Size(max=500) String imagenUrl
 ) {
+    public ActualizarAnuncioRequest(String titulo, String cuerpo) { this(titulo, cuerpo, null, null, null); }
+    public ActualizarAnuncioRequest(String titulo,String cuerpo,Boolean publicado,Boolean fijado){this(titulo,cuerpo,publicado,fijado,null);}
 }

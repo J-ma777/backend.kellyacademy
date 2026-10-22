@@ -29,6 +29,15 @@ public class Anuncio extends BaseEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String cuerpo;
 
+    @Column(name="imagen_url", length=500)
+    private String imagenUrl;
+
     @Column(nullable = false)
     private Boolean activo = true;
+    @Column(nullable = false)
+    private Boolean publicado = true;
+    @Column(nullable = false)
+    private Boolean fijado = false;
+    @Column(name = "publicado_at")
+    private java.time.LocalDateTime publicadoAt;
 }

@@ -51,7 +51,7 @@ class EntregaControllerIT extends IntegrationTestBase {
         );
         CursoResponse curso = post("/api/cursos", adminToken, c, CursoResponse.class).getBody();
         UUID cursoId = Objects.requireNonNull(curso).id();
-        activarCurso(cursoId);
+        if (curso.estado() != com.kellyacademy.course.enums.EstadoCurso.ACTIVO) activarCurso(cursoId);
 
         // Matricula del estudiante en el curso.
         MatriculaResponse matriculaResp = post("/api/matriculas", adminToken,

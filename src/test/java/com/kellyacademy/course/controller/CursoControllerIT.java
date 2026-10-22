@@ -29,7 +29,12 @@ class CursoControllerIT extends IntegrationTestBase {
         );
         ResponseEntity<CursoResponse> resp = post("/api/cursos", adminToken, req, CursoResponse.class);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(resp.getBody().estado()).isEqualTo(EstadoCurso.BORRADOR);
+        assertThat(resp.getBody().estado()).isEqualTo(EstadoCurso.ACTIVO);
+        // El alta actual crea cursos activos. Los casos de transición desde borrador
+        // necesitan preparar explícitamente ese estado como dato de prueba.
+        var curso = cursoRepository.findById(resp.getBody().id()).orElseThrow();
+        curso.setEstado(EstadoCurso.BORRADOR);
+        cursoRepository.saveAndFlush(curso);
         return resp.getBody().id();
     }
 
@@ -41,6 +46,15 @@ class CursoControllerIT extends IntegrationTestBase {
                 new HttpEntity<>(req, headersConToken(token)),
                 CursoResponse.class
         );
+    }
+
+    @Test
+    void crearComoDocentePropietarioProduceCursoActivoPersistido() {
+        var request = new CrearCursoRequest(docenteDuenoId, "Alta del docente", null, NivelCefr.A2, null, null, null, 20);
+        var result = post("/api/cursos", docenteDuenoToken, request, CursoResponse.class);
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(result.getBody().estado()).isEqualTo(EstadoCurso.ACTIVO);
+        assertThat(cursoRepository.findById(result.getBody().id()).orElseThrow().getEstado()).isEqualTo(EstadoCurso.ACTIVO);
     }
 
     private ResponseEntity<ErrorResponse> patchEstadoError(UUID cursoId, EstadoCurso nuevo, String token) {

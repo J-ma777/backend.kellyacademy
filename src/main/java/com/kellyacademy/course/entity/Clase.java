@@ -1,6 +1,5 @@
 package com.kellyacademy.course.entity;
 
-import com.kellyacademy.shared.base.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -13,7 +12,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Entity
 @Table(name = "clases")
-public class Clase extends BaseEntity {
+public class Clase extends ContenidoEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "semana_id", nullable = false)

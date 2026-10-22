@@ -44,6 +44,8 @@ class ClaseServiceTest {
     @Mock private SemanaRepository semanaRepository;
     @Mock private ClaseMapper claseMapper;
 
+    @Mock private AccesoCursoService acceso;
+
     @InjectMocks
     private ClaseService claseService;
 

@@ -9,6 +9,8 @@ public record ClaseResumenResponse(
         String titulo,
         LocalDateTime fechaHora,
         Integer duracionMinutos,
-        String sala
+        String sala,
+        Boolean publicado,
+        Boolean visible
 ) {
 }

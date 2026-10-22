@@ -17,6 +17,7 @@ public class Notificacion extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "usuario_id", nullable = false)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     private Usuario usuario;
 
     @Enumerated(EnumType.STRING)

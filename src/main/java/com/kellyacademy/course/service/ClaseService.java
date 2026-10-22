@@ -27,6 +27,7 @@ import java.util.UUID;
 public class ClaseService {
 
     private final ClaseRepository claseRepository;
+    private final AccesoCursoService acceso;
     private final SemanaRepository semanaRepository;
     private final ClaseMapper claseMapper;
     private static final String RECURSO = "Clase";
@@ -43,7 +44,9 @@ public class ClaseService {
         if (!semanaRepository.existsById(semanaId)) {
             throw new ResourceNotFoundException(RECURSO_SEMANA, "id", semanaId);
         }
+        acceso.validarSemana(semanaId);
         return claseRepository.findBySemanaIdOrderByFechaHoraAsc(semanaId).stream()
+                .filter(acceso::puedeVer)
                 .map(claseMapper::toResumenResponse)
                 .toList();
     }
@@ -52,6 +55,7 @@ public class ClaseService {
     public ClaseResponse obtener(UUID id) {
         Clase clase = claseRepository.findWithSemanaCursoDocenteById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+        acceso.validarContenido(clase);
         return claseMapper.toResponse(clase);
     }
 

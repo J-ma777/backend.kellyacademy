@@ -14,6 +14,8 @@ public record ClaseResponse(
         Integer duracionMinutos,
         String sala,
         LocalDateTime fechaCreacion,
-        LocalDateTime fechaActualizacion
+        LocalDateTime fechaActualizacion,
+        Boolean publicado,
+        Boolean visible
 ) {
 }

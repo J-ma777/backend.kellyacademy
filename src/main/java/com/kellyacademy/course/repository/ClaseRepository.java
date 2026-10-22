@@ -13,8 +13,12 @@ import java.util.UUID;
 
 public interface ClaseRepository extends JpaRepository<Clase, UUID> {
 
+    @EntityGraph(attributePaths = {"semana"})
+    List<Clase> findBySemanaUnidadCursoIdOrderByFechaHoraAsc(UUID cursoId);
+
     List<Clase> findBySemanaIdOrderByFechaHoraAsc(UUID semanaId);
 
+    @EntityGraph(attributePaths = {"semana", "semana.unidad", "semana.unidad.curso", "semana.unidad.curso.docente"})
     List<Clase> findByFechaHoraBetween(LocalDateTime inicio, LocalDateTime fin);
 
     boolean existsBySemanaId(UUID semanaId);

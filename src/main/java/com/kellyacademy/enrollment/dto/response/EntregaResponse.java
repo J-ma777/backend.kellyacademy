@@ -22,6 +22,8 @@ public record EntregaResponse(
         UUID calificadoPorId,
         String calificadoPorNombreCompleto,
         LocalDateTime fechaCreacion,
-        LocalDateTime fechaActualizacion
+        LocalDateTime fechaActualizacion,
+        String textoRespuesta,
+        Boolean tardia
 ) {
 }

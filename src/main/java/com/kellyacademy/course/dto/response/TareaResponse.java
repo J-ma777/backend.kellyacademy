@@ -12,6 +12,9 @@ public record TareaResponse(
         LocalDateTime fechaLimite,
         Integer puntajeMaximo,
         LocalDateTime fechaCreacion,
-        LocalDateTime fechaActualizacion
+        LocalDateTime fechaActualizacion,
+        Boolean publicado,
+        Boolean visible,
+        com.kellyacademy.course.enums.TipoActividad tipoActividad
 ) {
 }

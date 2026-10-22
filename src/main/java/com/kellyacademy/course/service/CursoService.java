@@ -47,6 +47,7 @@ public class CursoService {
     private final MatriculaRepository matriculaRepository;
     private final CursoMapper cursoMapper;
     private final UnidadService unidadService;
+    private final HorarioCursoService horarioCursoService;
     private static final String RECURSO = "Curso";
     private static final String RECURSO_USUARIO = "Usuario";
 
@@ -64,7 +65,7 @@ public class CursoService {
         List<Matricula> matriculas = matriculaRepository.findByEstudianteId(usuarioId);
         if (!matriculas.isEmpty()) {
             return matriculas.stream()
-                    .filter(m -> m.getEstado() == EstadoMatricula.ACTIVA)
+                    .filter(m -> m.getEstado() != EstadoMatricula.ABANDONADA)
                     .map(Matricula::getCurso)
                     .distinct()
                     .map(cursoMapper::toResumenResponse)
@@ -119,6 +120,7 @@ public class CursoService {
         curso.setDocente(docente);
         curso.setEstado(EstadoCurso.ACTIVO);
 
+        if (request.horarios() != null) horarioCursoService.aplicar(curso, request.horarios());
         Curso guardado = cursoRepository.save(curso);
 
         return cursoMapper.toResponse(
@@ -134,7 +136,14 @@ public class CursoService {
         validarPropietarioOAdmin(curso);
         validarFechas(request.fechaInicio(), request.fechaFin());
 
+        String resumenAnterior = curso.getHorario();
         cursoMapper.actualizarDesdeRequest(request, curso);
+        if (request.horarios() != null) horarioCursoService.aplicar(curso, request.horarios());
+        else if (!curso.getHorarios().isEmpty()) {
+            curso.setHorario(resumenAnterior);
+            horarioCursoService.aplicar(curso, curso.getHorarios().stream()
+                    .map(h -> new com.kellyacademy.course.dto.request.HorarioCursoRequest(h.getDia(),h.getHoraInicio(),h.getHoraFin())).toList());
+        }
 
         return cursoMapper.toResponse(curso);
     }

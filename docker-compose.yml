@@ -56,6 +56,30 @@ services:
       postgres:
         condition: service_healthy
 
+  documentos:
+    image: gotenberg/gotenberg:8
+    container_name: kelly-academy-documentos
+    restart: unless-stopped
+    command:
+      - gotenberg
+      - --api-timeout=60s
+      - --api-body-limit=21MB
+      - --api-disable-download-from=true
+      - --chromium-disable-routes=true
+      - --libreoffice-auto-start=true
+      - --libreoffice-max-queue-size=4
+      - --libreoffice-deny-list=.*
+    mem_limit: 1g
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    networks:
+      - documentos-private
+
   backend:
     build:
       context: .
@@ -69,14 +93,27 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/kelly_academy
       DB_USERNAME: postgres
       DB_PASSWORD: ${DB_PASSWORD}
+      DOCUMENT_CONVERTER_URL: http://documentos:3000
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_REGION: ${R2_REGION:-auto}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:3000,http://localhost:5173}
     depends_on:
+      documentos:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     networks:
       - kelly-network
+      - documentos-private
 
 volumes:
   postgres_data:
@@ -88,3 +125,5 @@ networks:
   kelly-network:
     name: kelly-academy-network
     driver: bridge
+  documentos-private:
+    internal: true

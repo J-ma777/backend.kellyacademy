@@ -25,12 +25,18 @@ public interface TareaMapper {
 
     TareaResumenResponse toResumenResponse(Tarea tarea);
 
+    @Mapping(target = "publicado", ignore = true)
+    @Mapping(target = "visible", ignore = true)
+    @Mapping(target = "tipoActividad", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "fechaCreacion", ignore = true)
     @Mapping(target = "fechaActualizacion", ignore = true)
     @Mapping(target = "semana", ignore = true)
     Tarea toEntity(CrearTareaRequest request);
 
+    @Mapping(target = "publicado", ignore = true)
+    @Mapping(target = "visible", ignore = true)
+    @Mapping(target = "tipoActividad", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "fechaCreacion", ignore = true)
     @Mapping(target = "fechaActualizacion", ignore = true)

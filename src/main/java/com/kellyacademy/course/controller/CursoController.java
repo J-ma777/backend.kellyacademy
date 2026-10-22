@@ -11,6 +11,8 @@ import com.kellyacademy.course.dto.response.UnidadResumenResponse;
 import com.kellyacademy.course.enums.EstadoCurso;
 import com.kellyacademy.course.enums.NivelCefr;
 import com.kellyacademy.course.service.CursoService;
+import com.kellyacademy.course.service.PanelCursoService;
+import com.kellyacademy.course.dto.response.PanelCursoResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -30,6 +32,13 @@ import java.util.UUID;
 public class CursoController {
 
     private final CursoService cursoService;
+    private final PanelCursoService panelCursoService;
+
+    @GetMapping("/{id}/panel-docente")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'DOCENTE')")
+    public ResponseEntity<PanelCursoResponse> obtenerPanelDocente(@PathVariable UUID id) {
+        return ResponseEntity.ok(panelCursoService.obtener(id));
+    }
 
     @GetMapping
     public ResponseEntity<Page<CursoResumenResponse>> listar(

@@ -10,6 +10,8 @@ public record MaterialResumenResponse(
         UUID id,
         String titulo,
         TipoMaterial tipo,
-        BigDecimal tamanoMb
+        BigDecimal tamanoMb,
+        Boolean publicado,
+        Boolean visible
 ) {
 }

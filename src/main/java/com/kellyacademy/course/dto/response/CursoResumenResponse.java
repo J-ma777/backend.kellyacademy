@@ -5,13 +5,15 @@ import com.kellyacademy.course.enums.NivelCefr;
 
 import java.util.UUID;
 
-// Para listados y selects. Sin descripcion ni fechas de auditoria.
+// Datos de la tarjeta de curso. Sin colecciones ni fechas de auditoria.
 public record CursoResumenResponse(
         UUID id,
         String titulo,
         NivelCefr nivelCefr,
         String horario,
         EstadoCurso estado,
-        UUID docenteId
+        UUID docenteId,
+        String descripcion,
+        String docenteNombreCompleto
 ) {
 }

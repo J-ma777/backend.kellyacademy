@@ -22,7 +22,15 @@ public interface MatriculaRepository extends
 
     List<Matricula> findByCursoId(UUID cursoId);
 
+    @EntityGraph(attributePaths = {"curso", "estudiante"})
+    List<Matricula> findByCursoIdOrderByEstudianteApellidoAscEstudianteNombreAsc(UUID cursoId);
+
     List<Matricula> findByEstudianteId(UUID estudianteId);
+
+    @EntityGraph(attributePaths = {"curso", "estudiante"})
+    List<Matricula> findByEstudianteIdIn(java.util.Collection<UUID> estudianteIds);
+
+    long countByCursoIdAndEstadoIn(UUID cursoId, java.util.Collection<EstadoMatricula> estados);
 
     Optional<Matricula> findByCursoIdAndEstudianteId(UUID cursoId, UUID estudianteId);
 

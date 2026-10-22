@@ -1,7 +1,6 @@
 package com.kellyacademy.course.entity;
 
 import com.kellyacademy.course.enums.TipoMaterial;
-import com.kellyacademy.shared.base.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -14,7 +13,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @Entity
 @Table(name = "materiales")
-public class Material extends BaseEntity {
+public class Material extends ContenidoEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "semana_id", nullable = false)

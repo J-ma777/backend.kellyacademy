@@ -27,6 +27,8 @@ import java.util.UUID;
 public class TareaService {
 
     private final TareaRepository tareaRepository;
+    private final com.kellyacademy.enrollment.repository.EntregaRepository entregaRepository;
+    private final AccesoCursoService acceso;
     private final SemanaRepository semanaRepository;
     private final TareaMapper tareaMapper;
     private static final String RECURSO = "Tarea";
@@ -43,7 +45,9 @@ public class TareaService {
         if (!semanaRepository.existsById(semanaId)) {
             throw new ResourceNotFoundException(RECURSO_SEMANA, "id", semanaId);
         }
+        acceso.validarSemana(semanaId);
         return tareaRepository.findBySemanaIdOrderByFechaLimiteAsc(semanaId).stream()
+                .filter(acceso::puedeVer)
                 .map(tareaMapper::toResumenResponse)
                 .toList();
     }
@@ -52,6 +56,7 @@ public class TareaService {
     public TareaResponse obtener(UUID id) {
         Tarea tarea = tareaRepository.findWithSemanaCursoDocenteById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
+        acceso.validarContenido(tarea);
         return tareaMapper.toResponse(tarea);
     }
 
@@ -83,6 +88,10 @@ public class TareaService {
 
         validarUrl(request.instruccionesUrl());
 
+        if (request.puntajeMaximo() != null && !request.puntajeMaximo().equals(tarea.getPuntajeMaximo())
+                && entregaRepository.existsByTareaIdAndEstado(id, com.kellyacademy.enrollment.enums.EstadoEntrega.CALIFICADA)) {
+            throw new BusinessException("PUNTAJE_CON_NOTAS", "No se puede cambiar el puntaje máximo de una actividad que ya tiene calificaciones");
+        }
         tareaMapper.actualizarDesdeRequest(request, tarea);
 
         return tareaMapper.toResponse(tarea);

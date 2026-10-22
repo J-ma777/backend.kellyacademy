@@ -22,6 +22,11 @@ public interface EntregaRepository extends
 
     List<Entrega> findByTareaId(UUID tareaId);
 
+    boolean existsByTareaIdAndEstado(UUID tareaId, EstadoEntrega estado);
+
+    @EntityGraph(attributePaths = {"tarea", "estudiante", "calificadoPor"})
+    List<Entrega> findByTareaSemanaUnidadCursoIdOrderByEnviadoAtDesc(UUID cursoId);
+
     List<Entrega> findByEstudianteId(UUID estudianteId);
 
     Optional<Entrega> findByTareaIdAndEstudianteId(UUID tareaId, UUID estudianteId);

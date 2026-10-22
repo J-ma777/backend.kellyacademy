@@ -28,6 +28,7 @@ public interface EntregaMapper {
     @Mapping(target = "estudianteCorreo", source = "estudiante", qualifiedByName = "extraerCorreo")
     @Mapping(target = "calificadoPorId", source = "calificadoPor", qualifiedByName = "extraerIdUsuario")
     @Mapping(target = "calificadoPorNombreCompleto", source = "calificadoPor", qualifiedByName = "extraerNombreCompleto")
+    @Mapping(target = "tardia", expression = "java(entity.getEnviadoAt() != null && entity.getTarea().getFechaLimite() != null && entity.getEnviadoAt().isAfter(entity.getTarea().getFechaLimite()))")
     EntregaResponse toResponse(Entrega entity);
 
     @Mapping(target = "tareaId", source = "tarea", qualifiedByName = "extraerIdTarea")
@@ -36,6 +37,7 @@ public interface EntregaMapper {
     @Mapping(target = "estudianteNombreCompleto", source = "estudiante", qualifiedByName = "extraerNombreCompleto")
     EntregaResumenResponse toResumenResponse(Entrega entity);
 
+    @Mapping(target = "textoRespuesta", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "fechaCreacion", ignore = true)
     @Mapping(target = "fechaActualizacion", ignore = true)
@@ -49,6 +51,7 @@ public interface EntregaMapper {
     @Mapping(target = "calificadoPor", ignore = true)
     Entrega toEntity(CrearEntregaRequest request);
 
+    @Mapping(target = "textoRespuesta", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "fechaCreacion", ignore = true)
     @Mapping(target = "fechaActualizacion", ignore = true)

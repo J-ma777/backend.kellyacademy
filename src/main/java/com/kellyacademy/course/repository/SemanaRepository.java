@@ -12,6 +12,9 @@ import java.util.UUID;
 
 public interface SemanaRepository extends JpaRepository<Semana, UUID> {
 
+    @EntityGraph(attributePaths = {"unidad"})
+    List<Semana> findByUnidadCursoIdOrderByUnidadNumeroAscNumeroAsc(UUID cursoId);
+
     List<Semana> findByUnidadIdOrderByNumeroAsc(UUID unidadId);
 
     Optional<Semana> findByUnidadIdAndNumero(UUID unidadId, Integer numero);

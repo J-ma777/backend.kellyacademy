@@ -11,6 +11,10 @@ public record AnuncioResumenResponse(
         String autorNombreCompleto,
         String titulo,
         Boolean activo,
-        LocalDateTime fechaCreacion
+        LocalDateTime fechaCreacion,
+        Boolean publicado,
+        Boolean fijado,
+        java.time.LocalDateTime publicadoAt,
+        String imagenUrl
 ) {
 }

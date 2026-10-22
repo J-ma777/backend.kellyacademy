@@ -43,12 +43,15 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AnuncioServiceTest {
 
+    @Mock private com.kellyacademy.storage.ArchivoAccesoService archivos;
     @Mock private AnuncioRepository anuncioRepository;
     @Mock private CursoRepository cursoRepository;
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private MatriculaRepository matriculaRepository;
     @Mock private AnuncioMapper anuncioMapper;
     @Mock private NotificacionService notificacionService;
+
+    @Mock private com.kellyacademy.course.service.AccesoCursoService acceso;
 
     @InjectMocks private AnuncioService anuncioService;
 

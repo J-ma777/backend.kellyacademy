@@ -33,6 +33,10 @@ public interface AnuncioMapper {
     @Mapping(target = "autorNombreCompleto", source = "autor", qualifiedByName = "extraerNombreCompleto")
     AnuncioResumenResponse toResumenResponse(Anuncio entity);
 
+    @Mapping(target = "imagenUrl", ignore = true)
+    @Mapping(target = "publicado", ignore = true)
+    @Mapping(target = "fijado", ignore = true)
+    @Mapping(target = "publicadoAt", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "fechaCreacion", ignore = true)
     @Mapping(target = "fechaActualizacion", ignore = true)
@@ -41,6 +45,10 @@ public interface AnuncioMapper {
     @Mapping(target = "activo", ignore = true)
     Anuncio toEntity(CrearAnuncioRequest request);
 
+    @Mapping(target = "imagenUrl", ignore = true)
+    @Mapping(target = "publicado", ignore = true)
+    @Mapping(target = "fijado", ignore = true)
+    @Mapping(target = "publicadoAt", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "fechaCreacion", ignore = true)
     @Mapping(target = "fechaActualizacion", ignore = true)

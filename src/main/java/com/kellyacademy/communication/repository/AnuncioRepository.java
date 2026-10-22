@@ -21,6 +21,9 @@ public interface AnuncioRepository extends
 
     List<Anuncio> findByCursoIdAndActivoTrueOrderByFechaCreacionDesc(UUID cursoId);
 
+    @EntityGraph(attributePaths = {"curso", "autor"})
+    List<Anuncio> findByCursoIdOrderByFechaCreacionDesc(UUID cursoId);
+
     List<Anuncio> findByAutorId(UUID autorId);
 
     // Carga curso (con docente para autorizacion) y autor en la misma query.

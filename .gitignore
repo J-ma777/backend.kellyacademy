@@ -135,7 +135,8 @@ spring-shell.log
 # -----------------------------------------
 uploads/
 files/
-storage/
+/storage/
+/target-evidencia/
 
 # -----------------------------------------
 # Ayuda / docs autogenerados

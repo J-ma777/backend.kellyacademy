@@ -29,6 +29,9 @@ public interface TutoriaRepository extends
 
     List<Tutoria> findByEstado(EstadoTutoria estado);
 
+    @EntityGraph(attributePaths = {"estudiante", "docente", "curso"})
+    List<Tutoria> findByFechaBetween(LocalDateTime inicio, LocalDateTime fin);
+
     // Carga estudiante, docente y curso en la misma query. Necesario para que
     // TutoriaMapper lea los escalares sin disparar SELECTs adicionales
     // (open-in-view=false + @ManyToOne LAZY).

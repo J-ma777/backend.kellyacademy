@@ -13,6 +13,11 @@ import java.util.UUID;
 
 public interface MaterialRepository extends JpaRepository<Material, UUID> {
 
+    boolean existsByUrlArchivoAndSemanaUnidadCursoIdAndPublicadoTrueAndVisibleTrue(String url, UUID cursoId);
+
+    @EntityGraph(attributePaths = {"semana"})
+    List<Material> findBySemanaUnidadCursoIdOrderByFechaCreacionAsc(UUID cursoId);
+
     List<Material> findBySemanaId(UUID semanaId);
 
     List<Material> findBySemanaIdAndTipo(UUID semanaId, TipoMaterial tipo);

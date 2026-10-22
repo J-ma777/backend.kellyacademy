@@ -1,0 +1,4 @@
+ALTER TABLE archivos ADD COLUMN proveedor VARCHAR(20) NOT NULL DEFAULT 'CLOUDINARY';
+ALTER TABLE archivos DROP CONSTRAINT IF EXISTS archivos_destino_check;
+ALTER TABLE archivos ADD CONSTRAINT archivos_destino_check CHECK (destino IN ('MATERIAL','ACTIVIDAD','ANUNCIO','ENTREGA'));
+ALTER TABLE anuncios ADD COLUMN imagen_url VARCHAR(500);

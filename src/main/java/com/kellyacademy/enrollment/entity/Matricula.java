@@ -31,13 +31,14 @@ public class Matricula extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "estudiante_id", nullable = false)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     private Usuario estudiante;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private EstadoMatricula estado;
 
-    @Column(name = "nota_final", precision = 4, scale = 2)
+    @Column(name = "nota_final", precision = 5, scale = 2)
     private BigDecimal notaFinal;
 
     @Column(name = "asistencia_porcentaje", precision = 5, scale = 2)

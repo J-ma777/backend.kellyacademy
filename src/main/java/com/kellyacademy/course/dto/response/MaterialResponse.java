@@ -16,6 +16,8 @@ public record MaterialResponse(
         BigDecimal tamanoMb,
         String urlExterno,
         LocalDateTime fechaCreacion,
-        LocalDateTime fechaActualizacion
+        LocalDateTime fechaActualizacion,
+        Boolean publicado,
+        Boolean visible
 ) {
 }

@@ -31,15 +31,18 @@ public class Entrega extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "estudiante_id", nullable = false)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     private Usuario estudiante;
 
     @Column(name = "url_archivo", length = 500)
     private String urlArchivo;
+    @Column(name = "texto_respuesta", columnDefinition = "TEXT")
+    private String textoRespuesta;
 
     @Column(name = "enviado_at")
     private LocalDateTime enviadoAt;
 
-    @Column(precision = 5, scale = 2)
+    @Column(precision = 6, scale = 2)
     private BigDecimal nota;
 
     @Column(columnDefinition = "TEXT")

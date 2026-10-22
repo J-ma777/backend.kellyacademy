@@ -19,6 +19,7 @@ public interface CursoRepository extends
         JpaRepository<Curso, UUID>,
         JpaSpecificationExecutor<Curso> {
 
+    @EntityGraph(attributePaths = {"docente"})
     List<Curso> findByDocenteId(UUID docenteId);
 
     List<Curso> findByEstado(EstadoCurso estado);

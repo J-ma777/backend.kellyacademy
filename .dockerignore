@@ -12,6 +12,7 @@
 
 # Build
 target/
+target-evidencia/
 
 # Entorno / secretos
 .env

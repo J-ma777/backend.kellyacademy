@@ -34,6 +34,7 @@ public interface UsuarioMapper {
     @Mapping(target = "contrasena", ignore = true)
     @Mapping(target = "estado", ignore = true)
     @Mapping(target = "roles", ignore = true)
+    @Mapping(target = "telefono", ignore = true)
     Usuario toEntity(CrearUsuarioRequest request);
 
     // Update parcial: solo pisa los campos del request, preserva el resto.
@@ -44,6 +45,7 @@ public interface UsuarioMapper {
     @Mapping(target = "correoElectronico", ignore = true)
     @Mapping(target = "estado", ignore = true)
     @Mapping(target = "roles", ignore = true)
+    @Mapping(target = "telefono", ignore = true)
     void actualizarDesdeRequest(ActualizarUsuarioRequest request, @MappingTarget Usuario usuario);
 
     @Named("nombresDeRoles")

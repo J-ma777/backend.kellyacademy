@@ -4,6 +4,7 @@ import com.kellyacademy.user.dto.request.*;
 import com.kellyacademy.user.dto.response.UsuarioResponse;
 import com.kellyacademy.user.dto.response.UsuarioResumenResponse;
 import com.kellyacademy.user.service.UsuarioService;
+import com.kellyacademy.user.enums.EstadoUsuario;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,9 +27,12 @@ public class UsuarioController {
     @GetMapping
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<Page<UsuarioResumenResponse>> listar(
-            @PageableDefault(size = 20, sort = "fechaCreacion") Pageable pageable
+            @PageableDefault(size = 20, sort = "fechaCreacion") Pageable pageable,
+            @RequestParam(required = false) String texto,
+            @RequestParam(required = false) EstadoUsuario estado,
+            @RequestParam(required = false) String rol
     ) {
-        return ResponseEntity.ok(usuarioService.listar(pageable));
+        return ResponseEntity.ok(usuarioService.listar(pageable, texto, estado, rol));
     }
 
     @GetMapping("/me")

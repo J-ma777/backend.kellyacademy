@@ -32,6 +32,11 @@ public class ConversacionController {
         return ResponseEntity.ok(conversacionService.listar(cursoId, pageable));
     }
 
+    @GetMapping("/contactos")
+    public ResponseEntity<java.util.List<ConversacionService.Contacto>> contactos(@RequestParam UUID cursoId) {
+        return ResponseEntity.ok(conversacionService.contactos(cursoId));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ConversacionResponse> obtener(@PathVariable UUID id) {
         return ResponseEntity.ok(conversacionService.obtener(id));

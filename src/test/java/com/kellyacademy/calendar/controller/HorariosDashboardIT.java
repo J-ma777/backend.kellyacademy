@@ -42,8 +42,12 @@ class HorariosDashboardIT extends IntegrationTestBase {
         var matricula=matriculaRepository.findByEstudianteId(usuarioRepository.findByCorreoElectronico("uno.diez@it.invalid").orElseThrow().getId()).getFirst();
         assertThat(patch("/api/matriculas/"+matricula.getId()+"/estado",adminToken,Map.of("estado","COMPLETADA"),Object.class).getStatusCode().value()).isEqualTo(200);
         assertThat(get("/api/dashboard/resumen",token,DashboardResumenResponse.class).getBody().metricas().cursosInscritos()).isEqualTo(1);
-        assertThat(delete("/api/docente/alumnos/"+matricula.getEstudiante().getId()+"/cursos/"+propio.id(),docenteDuenoToken).getStatusCode().value()).isEqualTo(204);
-        assertThat(get("/api/dashboard/resumen",token,DashboardResumenResponse.class).getBody().metricas().cursosInscritos()).isZero();
+        assertThat(delete("/api/docente/alumnos/"+matricula.getEstudiante().getId()+"/cursos/"+propio.id(),docenteDuenoToken).getStatusCode().value()).isEqualTo(400);
+        assertThat(get("/api/dashboard/resumen",token,DashboardResumenResponse.class).getBody().metricas().cursosInscritos()).isEqualTo(1);
+        String tokenActivo=alumno(propio.id(),"activo.retiro@it.invalid");
+        UUID activoId=usuarioRepository.findByCorreoElectronico("activo.retiro@it.invalid").orElseThrow().getId();
+        assertThat(delete("/api/docente/alumnos/"+activoId+"/cursos/"+propio.id(),docenteDuenoToken).getStatusCode().value()).isEqualTo(204);
+        assertThat(get("/api/dashboard/resumen",tokenActivo,DashboardResumenResponse.class).getBody().metricas().cursosInscritos()).isZero();
     }
     @Test void horarioPersisteSeRepiteSoloEnFechasDelCursoYRespetaZonaLima() {
         LocalDate lunes=LocalDate.now(AppTime.ZONA_NEGOCIO).with(TemporalAdjusters.next(DayOfWeek.MONDAY));

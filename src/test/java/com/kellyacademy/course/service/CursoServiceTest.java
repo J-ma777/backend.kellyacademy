@@ -11,6 +11,8 @@ import com.kellyacademy.course.enums.NivelCefr;
 import com.kellyacademy.course.mapper.CursoMapper;
 import com.kellyacademy.course.repository.CursoRepository;
 import com.kellyacademy.security.user.CustomUserDetails;
+import com.kellyacademy.enrollment.repository.MatriculaRepository;
+import com.kellyacademy.enrollment.enums.EstadoMatricula;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
 import com.kellyacademy.user.dto.response.UsuarioResumenResponse;
@@ -51,6 +53,9 @@ class CursoServiceTest {
 
     @Mock
     private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private MatriculaRepository matriculaRepository;
 
     @Mock
     private CursoMapper cursoMapper;
@@ -236,6 +241,22 @@ class CursoServiceTest {
         Curso cursoPersistido = captor.getValue();
         assertThat(cursoPersistido.getEstado()).isEqualTo(EstadoCurso.ACTIVO);
         assertThat(cursoPersistido.getDocente()).isSameAs(docente);
+    }
+
+    @Test
+    void actualizar_noPermiteReducirCapacidadPorDebajoDeMatriculados() {
+        UUID id = UUID.randomUUID();
+        Curso curso = cursoConEstado(id, EstadoCurso.ACTIVO);
+        var request = new com.kellyacademy.course.dto.request.ActualizarCursoRequest(
+                "Curso", null, com.kellyacademy.course.enums.NivelCefr.A1, null, null, null, 1);
+        when(cursoRepository.findByIdForUpdate(id)).thenReturn(Optional.of(curso));
+        when(matriculaRepository.countByCursoIdAndEstadoIn(id,
+                Set.of(EstadoMatricula.ACTIVA, EstadoMatricula.RIESGO))).thenReturn(2L);
+
+        assertThatThrownBy(() -> cursoService.actualizar(id, request))
+                .isInstanceOfSatisfying(BusinessException.class, ex ->
+                        assertThat(ex.getCodigo()).isEqualTo("CAPACIDAD_INFERIOR_A_MATRICULADOS"));
+        verify(cursoMapper, never()).actualizarDesdeRequest(any(), any());
     }
 
     @Test

@@ -35,6 +35,21 @@ public interface ClaseRepository extends JpaRepository<Clase, UUID> {
     @Query("SELECT c FROM Clase c WHERE c.id = :id")
     Optional<Clase> findWithSemanaCursoDocenteById(@Param("id") UUID id);
 
+    interface ConteoPorCurso {
+        UUID getCursoId();
+        Long getTotal();
+    }
+
+    @Query("""
+        SELECT c.semana.unidad.curso.id AS cursoId, COUNT(c) AS total
+        FROM Clase c
+        WHERE c.semana.unidad.curso.id IN :cursoIds
+          AND c.fechaHora IS NOT NULL AND c.fechaHora <= :ahora
+        GROUP BY c.semana.unidad.curso.id
+    """)
+    List<ConteoPorCurso> contarDictadasPorCursos(@Param("cursoIds") java.util.Collection<UUID> cursoIds,
+                                               @Param("ahora") LocalDateTime ahora);
+
     @Query("""
         SELECT COUNT(c) FROM Clase c
         WHERE c.semana.unidad.curso.id = :cursoId

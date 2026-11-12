@@ -33,7 +33,8 @@ class ArchivoControllerIT extends IntegrationTestBase {
     private void proveedor(UUID curso){
         when(r2.upload(any(),anyString(),anyString(),eq(curso))).thenAnswer(i->"cursos/"+curso+"/"+UUID.randomUUID()+".pdf");
         when(r2.downloadUrl(anyString())).thenReturn("https://private.example.test/document.pdf?signature=temporal");
-        when(cloudinary.upload(any(),anyString(),anyString(),eq(curso))).thenAnswer(i->{String id="image/"+UUID.randomUUID();return new CloudinaryGateway.Uploaded(id,"image","https://res.cloudinary.com/test/image/authenticated/s--signature--/"+id+".png");});
+        when(cloudinary.downloadUrl(anyString(),anyString())).thenReturn("https://api.cloudinary.com/v1_1/test/image/download?expires_at=temporal");
+        when(cloudinary.upload(any(),anyString(),anyString(),eq(curso))).thenAnswer(i->{String id="image/"+UUID.randomUUID();return new CloudinaryGateway.Uploaded(id,"image");});
     }
     @Test void docenteSubePdfYSePersistenMetadatosSinBinario(){
         UUID curso=curso();proveedor(curso);
@@ -109,11 +110,18 @@ class ArchivoControllerIT extends IntegrationTestBase {
         assertThat(get(ruta,docenteDuenoToken,Map.class).getStatusCode().value()).isEqualTo(200);
         assertThat(post("/api/entregas/enviar",b,Map.of("tareaId",tarea,"urlArchivo",pdf.get("url")),Map.class).getStatusCode().value()).isEqualTo(403);
         var image=subir(curso,a,"ENTREGA","respuesta.png",png()).getBody();
+        assertThat((String)image.get("url")).contains("/api/cursos/").doesNotContain("cloudinary.com").doesNotContain("s--");
+        String rutaImagen="/api/cursos/"+curso+"/archivos/"+image.get("id")+"/acceso";
+        var accesoImagen=get(rutaImagen,a,Map.class);
+        assertThat(accesoImagen.getStatusCode().value()).isEqualTo(200);
+        assertThat(accesoImagen.getBody().get("expiraEnSegundos")).isEqualTo(300);
+        assertThat(get(rutaImagen,b,Map.class).getStatusCode().value()).isEqualTo(403);
         assertThat(post("/api/entregas/enviar",a,Map.of("tareaId",tarea,"urlArchivo",image.get("url")),Map.class).getStatusCode().value()).isEqualTo(200);
         assertThat(archivos.findById(UUID.fromString((String)image.get("id"))).orElseThrow().getProveedor()).isEqualTo("CLOUDINARY");
         var matricula=matriculaRepository.findByEstudianteId(usuarioRepository.findByCorreoElectronico("respuesta.a@it.invalid").orElseThrow().getId()).getFirst();
         delete("/api/docente/alumnos/"+matricula.getEstudiante().getId()+"/cursos/"+curso,docenteDuenoToken);
         assertThat(get(ruta,a,Map.class).getStatusCode().value()).isEqualTo(403);
+        assertThat(get(rutaImagen,a,Map.class).getStatusCode().value()).isEqualTo(403);
     }
     @Test void anunciosAdmitenImagenOpcionalYRechazanDocumentosYArchivosDeOtroCurso(){
         UUID curso=curso();proveedor(curso);
@@ -126,6 +134,9 @@ class ArchivoControllerIT extends IntegrationTestBase {
         assertThat(con.getStatusCode().value()).isEqualTo(201);assertThat(con.getBody().get("imagenUrl")).isEqualTo(imagen.get("url"));
         String alumno=matricular(curso,"anuncio@it.invalid");
         assertThat(get("/api/anuncios/"+con.getBody().get("id"),alumno,Map.class).getBody().get("imagenUrl")).isEqualTo(imagen.get("url"));
+        var enlaceAnuncio=get("/api/cursos/"+curso+"/archivos/"+imagen.get("id")+"/acceso",alumno,Map.class);
+        assertThat(enlaceAnuncio.getStatusCode().value()).isEqualTo(200);
+        assertThat(enlaceAnuncio.getBody().get("expiraEnSegundos")).isEqualTo(300);
         UUID otro=curso();
         assertThat(post("/api/anuncios",docenteDuenoToken,Map.of("cursoId",otro,"titulo","Ajeno","cuerpo","Mensaje","imagenUrl",imagen.get("url")),Map.class).getStatusCode().value()).isEqualTo(403);
         assertThat(put("/api/anuncios/"+con.getBody().get("id"),docenteDuenoToken,Map.of("titulo","Sin imagen","cuerpo","Mensaje","imagenUrl",""),Map.class).getBody().get("imagenUrl")).isNull();

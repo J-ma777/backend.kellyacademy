@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.springframework.data.jpa.domain.Specification.allOf;
@@ -46,6 +47,8 @@ public class MatriculaService {
     private final UsuarioRepository usuarioRepository;
     private final MatriculaMapper matriculaMapper;
     private final CalculoMatriculaService calculoMatriculaService;
+    private final MatriculaEstadoService matriculaEstadoService;
+    private final AsistenciaActualService asistenciaActualService;
 
     @Transactional(readOnly = true)
     public Page<MatriculaResumenResponse> listar(
@@ -67,8 +70,10 @@ public class MatriculaService {
     @Transactional(readOnly = true)
     public List<MatriculaResponse> listarMisMatriculas() {
         UUID usuarioId = SecurityUtils.getUsuarioAutenticadoId();
-        return matriculaRepository.findByEstudianteId(usuarioId).stream()
-                .map(matriculaMapper::toResponse)
+        var matriculas = matriculaRepository.findByEstudianteId(usuarioId);
+        var asistencia = asistenciaActualService.calcular(matriculas);
+        return matriculas.stream()
+                .map(m -> AsistenciaActualService.aplicar(matriculaMapper.toResponse(m), asistencia))
                 .toList();
     }
 
@@ -79,12 +84,12 @@ public class MatriculaService {
 
         validarPuedeConsultar(matricula);
 
-        return matriculaMapper.toResponse(matricula);
+        return respuestaActual(matricula);
     }
 
     public MatriculaResponse crear(CrearMatriculaRequest request) {
 
-        Curso curso = cursoRepository.findWithDocenteById(request.cursoId())
+        Curso curso = cursoRepository.findByIdForUpdate(request.cursoId())
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO_CURSO, "id", request.cursoId()));
 
         Usuario estudiante = usuarioRepository.findWithRolesById(request.estudianteId())
@@ -104,7 +109,7 @@ public class MatriculaService {
         Matricula guardada = matriculaRepository.save(matricula);
 
         // Recargamos con @EntityGraph para que el mapper no dispare LazyInit.
-        return matriculaMapper.toResponse(
+        return respuestaActual(
                 matriculaRepository.findWithCursoAndEstudianteById(guardada.getId()).orElseThrow()
         );
     }
@@ -119,23 +124,12 @@ public class MatriculaService {
 
     public MatriculaResponse cambiarEstado(UUID id, EstadoMatricula nuevoEstado) {
 
-        Matricula matricula = matriculaRepository.findWithCursoAndEstudianteById(id)
+        Matricula matricula = matriculaRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
-        EstadoMatricula actual = matricula.getEstado();
+        matriculaEstadoService.cambiarEstado(matricula, nuevoEstado);
 
-        if (actual == nuevoEstado) {
-            throw new BusinessException(
-                    "ESTADO_SIN_CAMBIOS",
-                    "La matricula ya se encuentra en estado " + nuevoEstado
-            );
-        }
-
-        validarTransicionEstado(actual, nuevoEstado);
-
-        matricula.setEstado(nuevoEstado);
-
-        return matriculaMapper.toResponse(matricula);
+        return respuestaActual(matricula);
     }
 
     public MatriculaResponse recalcular(UUID id) {
@@ -144,32 +138,12 @@ public class MatriculaService {
         Matricula matricula = matriculaRepository.findWithCursoAndEstudianteById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
-        return matriculaMapper.toResponse(matricula);
+        return respuestaActual(matricula);
     }
 
-    // Maquina de estados:
-    //   ACTIVA     -> COMPLETADA, RIESGO, ABANDONADA
-    //   RIESGO     -> ACTIVA, COMPLETADA, ABANDONADA
-    //   COMPLETADA -> (terminal)
-    //   ABANDONADA -> (terminal)
-    private void validarTransicionEstado(EstadoMatricula actual, EstadoMatricula nuevo) {
-        boolean permitida = switch (actual) {
-            case ACTIVA -> nuevo == EstadoMatricula.COMPLETADA
-                    || nuevo == EstadoMatricula.RIESGO
-                    || nuevo == EstadoMatricula.ABANDONADA;
-            case RIESGO -> nuevo == EstadoMatricula.ACTIVA
-                    || nuevo == EstadoMatricula.COMPLETADA
-                    || nuevo == EstadoMatricula.ABANDONADA;
-            case COMPLETADA -> false;
-            case ABANDONADA -> false;
-        };
-
-        if (!permitida) {
-            throw new BusinessException(
-                    "TRANSICION_ESTADO_INVALIDA",
-                    "No se puede pasar de " + actual + " a " + nuevo
-            );
-        }
+    private MatriculaResponse respuestaActual(Matricula matricula) {
+        return AsistenciaActualService.aplicar(matriculaMapper.toResponse(matricula),
+                asistenciaActualService.calcular(List.of(matricula)));
     }
 
     // Un estudiante solo puede consultar sus propias matriculas. Un docente solo
@@ -210,11 +184,11 @@ public class MatriculaService {
         }
     }
 
-    // Cupo: matriculas ACTIVAS del curso < capacidadMaxima.
+    // El bloqueo de la fila del curso serializa la comprobación y la reserva.
+    // Las matrículas en riesgo siguen ocupando plaza.
     private void validarCupoDisponible(Curso curso) {
-        long matriculasActivas = matriculaRepository.countByCursoIdAndEstado(
-                curso.getId(),
-                EstadoMatricula.ACTIVA
+        long matriculasActivas = matriculaRepository.countByCursoIdAndEstadoIn(
+                curso.getId(), Set.of(EstadoMatricula.ACTIVA, EstadoMatricula.RIESGO)
         );
         if (matriculasActivas >= curso.getCapacidadMaxima()) {
             throw new BusinessException(

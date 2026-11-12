@@ -9,7 +9,7 @@ Se muestran las cuentas cuyo único rol es ESTUDIANTE, con los datos reales de u
 1. **Alta:** nombre completo, identificador institucional, teléfono peruano de 9 dígitos y contraseña inicial de al menos 8 caracteres. El backend normaliza el correo a minúsculas, añade `@kellyacademy.com`, valida duplicados con respuesta 409 y guarda la contraseña con el BCrypt de costo 12 existente. El teléfono se almacena sin espacios; la interfaz lo presenta como `999 159 716`.
 2. **WhatsApp:** después del alta aparece una tarjeta flotante. Su botón abre `https://wa.me/51…` con el nombre, correo, contraseña inicial y la dirección `/login` del origen donde está abierta la aplicación. El docente revisa y envía el mensaje desde WhatsApp. No se envía automáticamente. El backend nunca devuelve la contraseña y el frontend no la guarda en localStorage/sessionStorage. Al cerrar la tarjeta o salir del módulo se descarta su enlace con las credenciales.
 3. **Matrículas:** el modal lista todos los cursos persistidos, con su nivel y una referencia derivada de su UUID real, ya que el modelo actual no tiene un campo de código comercial. Los cursos inscritos aparecen seleccionados. Solo se pueden añadir cursos activos con cupos disponibles. El guardado inicia las altas y retiros en paralelo; si alguna operación falla, recarga el estado real, conserva la selección deseada y muestra el error para reintentar lo pendiente. Los bloqueos de base de datos impiden que las altas concurrentes de este módulo sobrepasen los cupos.
-4. **Retiro de un curso:** cambia la matrícula a ABANDONADA y bloquea el acceso a ese curso, conservando entregas y notas. Una reasignación reactiva la misma matrícula y conserva su historial. La eliminación definitiva de la cuenta es una operación separada.
+4. **Retiro de un curso:** cambia la matrícula a ABANDONADA y bloquea el acceso a ese curso, conservando entregas y notas. Los estados ABANDONADA y COMPLETADA son terminales: no se reactivan ni se reemplazan mediante este módulo. El retiro repetido de una matrícula abandonada es idempotente; una completada no se puede retirar. La eliminación definitiva de la cuenta es una operación separada.
 5. **Edición:** actualiza nombre, correo y teléfono; después aplica el cambio de estado, si corresponde. Los estados son Activo, Inactivo y Suspendido. Suspendido se traduce al estado BLOQUEADO que ya usa el backend. Las cuentas inactivas o suspendidas reciben 401 al intentar utilizar incluso un JWT todavía vigente. Cambiar el correo invalida los tokens asociados al correo anterior.
 6. **Eliminación definitiva:** `DeleteConfirmModal` exige marcar la confirmación antes de habilitar el botón. El servidor elimina la cuenta y las relaciones dependientes mediante cascada. La fila solo inicia su transición de salida tras la respuesta de éxito y se retira del DOM después de 220 ms. Se respeta la preferencia de movimiento reducido.
 
@@ -31,7 +31,7 @@ Base: `/api/docente/alumnos`.
 | POST | `/` | Crear cuenta de estudiante |
 | PATCH | `/{id}` | Editar datos básicos |
 | PATCH | `/{id}/estado` | Cambiar acceso a la cuenta |
-| POST | `/{id}/cursos` | Inscribir o reactivar una matrícula |
+| POST | `/{id}/cursos` | Inscribir; mantiene sin cambios una matrícula activa o en riesgo y rechaza las terminales |
 | DELETE | `/{id}/cursos/{cursoId}` | Retirar conservando historial |
 | DELETE | `/{id}` | Eliminar definitivamente la cuenta |
 

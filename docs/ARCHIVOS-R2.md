@@ -34,7 +34,7 @@ PostgreSQL guarda nombre, MIME, tamaño, curso, autor de la subida, finalidad, p
 - Retirar una matrícula bloquea nuevas solicitudes de acceso. Los enlaces R2 ya emitidos siguen siendo utilizables hasta caducar, como máximo cinco minutos.
 - El frontend solicita un enlace nuevo cada vez que se abre el documento. No envía el JWT a R2 ni a Cloudinary.
 
-Las imágenes conservan las URLs firmadas de Cloudinary. Esas URLs no caducan automáticamente y pueden compartirse; la comprobación de matrícula no revoca una URL de imagen que alguien ya haya copiado.
+Las imágenes nuevas usan referencias estables al backend y enlaces temporales de Cloudinary de cinco minutos tras autorización. Las imágenes históricas conservan sus URLs firmadas permanentes para no romper referencias; esas URLs no quedan revocadas por este cambio. Su inventario, migración y revocación con el proveedor están pendientes. Ver [CLOUDINARY.md](CLOUDINARY.md).
 
 ## Vista previa privada de PDF y Office
 

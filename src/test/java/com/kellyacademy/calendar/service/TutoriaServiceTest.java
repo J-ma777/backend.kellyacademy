@@ -23,6 +23,8 @@ import com.kellyacademy.user.repository.UsuarioRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -82,6 +84,8 @@ class TutoriaServiceTest {
         docente.setNombre("Doc");
         docente.setApellido("Uno");
         docente.setRoles(Set.of(rolDocente));
+        lenient().when(usuarioRepository.findByIdForUpdate(estudianteId)).thenReturn(Optional.of(estudiante));
+        lenient().when(usuarioRepository.findByIdForUpdate(docenteId)).thenReturn(Optional.of(docente));
     }
 
     @AfterEach
@@ -254,8 +258,9 @@ class TutoriaServiceTest {
                 .hasMessageContaining("matriculado");
     }
 
-    @Test
-    void crear_conCurso_ok() {
+    @ParameterizedTest
+    @EnumSource(value = EstadoMatricula.class, names = {"ACTIVA", "RIESGO"})
+    void crear_conCurso_matriculaQueConservaAcceso_ok(EstadoMatricula estado) {
         autenticarComo(estudiante);
 
         UUID cursoId = UUID.randomUUID();
@@ -264,7 +269,7 @@ class TutoriaServiceTest {
         curso.setDocente(docente);
 
         Matricula m = new Matricula();
-        m.setEstado(EstadoMatricula.ACTIVA);
+        m.setEstado(estado);
 
         CrearTutoriaRequest req = requestValido(cursoId, LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
 
@@ -287,6 +292,28 @@ class TutoriaServiceTest {
         tutoriaService.crear(req);
 
         verify(tutoriaRepository).save(any(Tutoria.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = EstadoMatricula.class, names = {"COMPLETADA", "ABANDONADA"})
+    void crear_conCurso_matriculaSinAcceso_lanzaBusinessException(EstadoMatricula estado) {
+        autenticarComo(estudiante);
+        UUID cursoId = UUID.randomUUID();
+        Curso curso = new Curso();
+        curso.setId(cursoId);
+        curso.setDocente(docente);
+        Matricula matricula = new Matricula();
+        matricula.setEstado(estado);
+        CrearTutoriaRequest req = requestValido(cursoId, LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
+        when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
+        when(usuarioRepository.findWithRolesById(docenteId)).thenReturn(Optional.of(docente));
+        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(Optional.of(matricula));
+
+        assertThatThrownBy(() -> tutoriaService.crear(req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("ACTIVA o RIESGO");
+        verify(tutoriaRepository, never()).save(any());
     }
 
     // -------- tests #47 + #48 en crear --------

@@ -1,6 +1,7 @@
 package com.kellyacademy.storage;
 
 import com.kellyacademy.course.repository.MaterialRepository;
+import com.kellyacademy.communication.repository.AnuncioRepository;
 import com.kellyacademy.course.repository.TareaRepository;
 import com.kellyacademy.course.service.AccesoCursoService;
 import com.kellyacademy.shared.exception.*;
@@ -17,6 +18,8 @@ public class ArchivoAccesoService {
     private final AccesoCursoService acceso;
     private final MaterialRepository materiales;
     private final TareaRepository tareas;
+    private final AnuncioRepository anuncios;
+    private final CloudinaryGateway cloudinary;
     private final R2Gateway r2;
     private final OfficePreviewGateway office;
     public record Enlace(String url,String nombre,String mime,long bytes,int expiraEnSegundos) {}
@@ -28,15 +31,25 @@ public class ArchivoAccesoService {
         if(!acceso.esGestor(curso)&&!propio){
             boolean publicado=!"ENTREGA".equals(archivo.getDestino())&&(
                     materiales.existsByUrlArchivoAndSemanaUnidadCursoIdAndPublicadoTrueAndVisibleTrue(archivo.getUrl(),cursoId)
-                    ||tareas.existsByInstruccionesUrlAndSemanaUnidadCursoIdAndPublicadoTrueAndVisibleTrue(archivo.getUrl(),cursoId));
+                    ||tareas.existsByInstruccionesUrlAndSemanaUnidadCursoIdAndPublicadoTrueAndVisibleTrue(archivo.getUrl(),cursoId)
+                    ||anuncios.existsByImagenUrlAndCursoIdAndActivoTrueAndPublicadoTrue(archivo.getUrl(),cursoId));
             if(!publicado)throw new AccessDeniedException("El archivo no está disponible para este usuario");
         }
         return archivo;
     }
     public Enlace obtener(UUID cursoId,UUID archivoId) {
         var archivo=autorizar(cursoId,archivoId);
-        boolean privado="R2".equals(archivo.getProveedor());
-        return new Enlace(privado?r2.downloadUrl(archivo.getPublicId()):archivo.getUrl(),archivo.getNombre(),archivo.getMime(),archivo.getBytes(),privado?300:0);
+        // Los documentos raw históricos de Cloudinary conservan su enlace previo;
+        // la migración de sus referencias necesita un proceso específico.
+        if ("CLOUDINARY".equals(archivo.getProveedor()) && !"image".equals(archivo.getResourceType())) {
+            return new Enlace(archivo.getUrl(),archivo.getNombre(),archivo.getMime(),archivo.getBytes(),0);
+        }
+        String url = switch (archivo.getProveedor()) {
+            case "R2" -> r2.downloadUrl(archivo.getPublicId());
+            case "CLOUDINARY" -> cloudinary.downloadUrl(archivo.getPublicId(), archivo.getMime());
+            default -> throw new BusinessException("PROVEEDOR_NO_ADMITIDO", "El proveedor del archivo no está disponible");
+        };
+        return new Enlace(url,archivo.getNombre(),archivo.getMime(),archivo.getBytes(),300);
     }
     public record VistaPrevia(String nombre,byte[] contenido) {}
     public VistaPrevia vistaPrevia(UUID cursoId,UUID archivoId) {

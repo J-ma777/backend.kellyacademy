@@ -4,13 +4,14 @@ import com.kellyacademy.user.entity.Usuario;
 import com.kellyacademy.user.enums.EstadoUsuario;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 import java.util.UUID;
 
-public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
+public interface UsuarioRepository extends JpaRepository<Usuario, UUID>, JpaSpecificationExecutor<Usuario> {
 
     @EntityGraph(attributePaths = {"roles", "roles.permisos"})
     Optional<Usuario> findByCorreoElectronico(String correoElectronico);

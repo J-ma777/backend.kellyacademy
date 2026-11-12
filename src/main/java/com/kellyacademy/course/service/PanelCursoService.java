@@ -15,6 +15,7 @@ import com.kellyacademy.enrollment.mapper.EntregaMapper;
 import com.kellyacademy.enrollment.mapper.MatriculaMapper;
 import com.kellyacademy.enrollment.repository.EntregaRepository;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
+import com.kellyacademy.enrollment.service.AsistenciaActualService;
 import com.kellyacademy.shared.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,7 @@ public class PanelCursoService {
     private final MaterialMapper materialMapper;
     private final TareaMapper tareaMapper;
     private final MatriculaMapper matriculaMapper;
+    private final AsistenciaActualService asistenciaActualService;
     private final AnuncioMapper anuncioMapper;
     private final EntregaMapper entregaMapper;
 
@@ -100,10 +102,14 @@ public class PanelCursoService {
                         .filter(s -> gestor || !s.clases().isEmpty() || !s.materiales().isEmpty() || !s.tareas().isEmpty()).toList()))
                 .filter(u -> gestor || !u.semanas().isEmpty()).toList();
 
+        var matriculasVisibles = matriculas.stream()
+                .filter(m -> gestor || m.getEstudiante().getId().equals(usuarioId)).toList();
+        var asistenciaActual = asistenciaActualService.calcular(matriculasVisibles);
         var alumnos = matriculas.stream().filter(m -> gestor || m.getEstado() != EstadoMatricula.ABANDONADA)
                 .map(m -> {
                     var r = matriculaMapper.toResponse(m);
-                    if (gestor || m.getEstudiante().getId().equals(usuarioId)) return r;
+                    if (gestor || m.getEstudiante().getId().equals(usuarioId))
+                        return AsistenciaActualService.aplicar(r, asistenciaActual);
                     return new MatriculaResponse(r.id(), r.cursoId(), r.cursoTitulo(), r.estudianteId(), r.estudianteNombreCompleto(),
                             r.estudianteCorreo(), r.estado(), null, null, r.matriculadoAt(), r.fechaCreacion(), r.fechaActualizacion());
                 }).toList();

@@ -25,6 +25,10 @@ USER spring:spring
 
 WORKDIR /app
 
+# El contenedor usa el perfil seguro salvo que el entorno lo sobrescriba.
+# docker-compose establece explícitamente dev para desarrollo local.
+ENV SPRING_PROFILES_ACTIVE=prod
+
 # JAR renombrado para ENTRYPOINT estable
 COPY --from=build --chown=spring:spring /workspace/app.jar app.jar
 
@@ -35,6 +39,6 @@ ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseSerialGC -XX:TieredStopAtLevel=
 
 # Healthcheck usando Spring Actuator
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=30s \
-  CMD wget -q --spider http://localhost:8080/actuator/health || exit 1
+  CMD wget -q --spider "http://localhost:${PORT:-8080}/actuator/health" || exit 1
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

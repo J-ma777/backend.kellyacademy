@@ -8,6 +8,7 @@ import com.kellyacademy.library.dto.response.DescargaRecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResponse;
 import com.kellyacademy.library.dto.response.RecursoResumenResponse;
 import com.kellyacademy.library.service.RecursoBibliotecaService;
+import com.kellyacademy.security.clientip.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -15,8 +16,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -28,6 +31,7 @@ import java.util.UUID;
 public class RecursoBibliotecaController {
 
     private final RecursoBibliotecaService recursoService;
+    private final ClientIpResolver clientIpResolver;
 
     @GetMapping
     public ResponseEntity<Page<RecursoResumenResponse>> listar(
@@ -40,35 +44,24 @@ public class RecursoBibliotecaController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<RecursoResponse> obtener(@PathVariable UUID id) {
-        return ResponseEntity.ok(recursoService.obtener(id));
+    public ResponseEntity<RecursoResponse> obtener(@PathVariable UUID id, Authentication auth) {
+        RecursoResponse recurso = recursoService.obtener(id);
+        boolean gestor = auth.getAuthorities().stream().anyMatch(a ->
+                a.getAuthority().equals("ROLE_ADMINISTRADOR") || a.getAuthority().equals("ROLE_DOCENTE"));
+        if (!gestor) {
+            recurso = new RecursoResponse(recurso.id(), recurso.titulo(), recurso.descripcion(), recurso.categoria(),
+                    recurso.nivelCefr(), recurso.tipo(), null, null, recurso.tamanoMb(), recurso.contadorDescargas(),
+                    recurso.fechaCreacion(), recurso.fechaActualizacion());
+        }
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(recurso);
     }
 
     @PostMapping("/{id}/descargar")
     public ResponseEntity<DescargaRecursoResponse> descargar(
             @PathVariable UUID id,
             HttpServletRequest request) {
-        return ResponseEntity.ok(recursoService.descargar(id, obtenerIpCliente(request)));
-    }
-
-    /*
-     Cloudflare establece CF-Connecting-IP con la IP real del cliente.
-     */
-    private String obtenerIpCliente(HttpServletRequest request) {
-        String ipCloudflare = request.getHeader("CF-Connecting-IP");
-        if (ipCloudflare != null && !ipCloudflare.isBlank()) {
-            return ipCloudflare.trim();
-        }
-
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            String primeraIp = forwardedFor.split(",")[0].trim();
-            if (!primeraIp.isBlank()) {
-                return primeraIp;
-            }
-        }
-
-        return request.getRemoteAddr();
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(recursoService.descargar(id, clientIpResolver.resolve(request).orElse(null)));
     }
 
     @PostMapping

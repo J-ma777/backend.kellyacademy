@@ -10,6 +10,8 @@ import com.kellyacademy.library.entity.RecursoDescarga;
 import com.kellyacademy.library.repository.RecursoDescargaRepository;
 import com.kellyacademy.shared.exception.ErrorResponse;
 import com.kellyacademy.support.IntegrationTestBase;
+import com.kellyacademy.storage.ArchivoBibliotecaService;
+import com.kellyacademy.storage.R2Gateway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,16 +19,23 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.util.LinkedMultiValueMap;
 
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.when;
 
 class RecursoBibliotecaControllerIT extends IntegrationTestBase {
 
     @Autowired private RecursoDescargaRepository recursoDescargaRepository;
+    @MockitoBean private R2Gateway r2;
 
     private String estudianteToken;
     private UUID estudianteId;
@@ -160,6 +169,45 @@ class RecursoBibliotecaControllerIT extends IntegrationTestBase {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(Objects.requireNonNull(resp.getBody()).id()).isEqualTo(creado.id());
+        assertThat(resp.getBody().urlArchivo()).isNull();
+        assertThat(resp.getBody().urlExterno()).isNull();
+    }
+
+    @Test
+    void archivoBiblioteca_permisosYDescargaAuditada() {
+        when(r2.upload(any(byte[].class), eq("pdf"), eq("application/pdf"), any(UUID.class)))
+                .thenReturn("biblioteca/prueba.pdf");
+        when(r2.downloadUrl("biblioteca/prueba.pdf")).thenReturn("https://almacen.example/temporal");
+
+        assertThat(subirPdf(estudianteToken, ErrorResponse.class).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        ResponseEntity<ArchivoBibliotecaService.Resultado> upload = subirPdf(docenteDuenoToken, ArchivoBibliotecaService.Resultado.class);
+        assertThat(upload.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        ArchivoBibliotecaService.Resultado archivo = Objects.requireNonNull(upload.getBody());
+
+        // Otro docente no puede publicar el archivo que todavía no es suyo.
+        assertThat(post("/api/recursos", docenteAjenoToken, req(archivo.url(), null), ErrorResponse.class).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        RecursoResponse creado = Objects.requireNonNull(post("/api/recursos", docenteDuenoToken,
+                req(archivo.url(), null), RecursoResponse.class).getBody());
+        RecursoResponse detalle = Objects.requireNonNull(get("/api/recursos/" + creado.id(), estudianteToken, RecursoResponse.class).getBody());
+        assertThat(detalle.urlArchivo()).isNull();
+
+        DescargaRecursoResponse descarga = Objects.requireNonNull(post("/api/recursos/" + creado.id() + "/descargar",
+                estudianteToken, null, DescargaRecursoResponse.class).getBody());
+        assertThat(descarga.urlArchivo()).isEqualTo("https://almacen.example/temporal");
+        assertThat(descarga.contadorDescargas()).isEqualTo(1);
+        assertThat(recursoDescargaRepository.countByRecursoId(creado.id())).isEqualTo(1);
+    }
+
+    private <T> ResponseEntity<T> subirPdf(String token, Class<T> responseType) {
+        HttpHeaders headers = headersConToken(token);
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        LinkedMultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+        form.add("archivo", new ByteArrayResource("%PDF-test".getBytes(java.nio.charset.StandardCharsets.US_ASCII)) {
+            @Override public String getFilename() { return "prueba.pdf"; }
+        });
+        return rest.postForEntity("/api/biblioteca/archivos", new HttpEntity<>(form, headers), responseType);
     }
 
     @Test
@@ -351,21 +399,21 @@ class RecursoBibliotecaControllerIT extends IntegrationTestBase {
     }
 
     @Test
-    void descargar_conIpCloudflare_registraIpReal() {
+    void descargar_enModoDirecto_ignoraIpCloudflareNoConfiable() {
         RecursoResponse creado = crearRecursoDescargable();
 
         descargarConHeaders(creado.id(), "198.51.100.24", null);
 
-        assertThat(ultimaTraza(creado.id()).getIp()).isEqualTo("198.51.100.24");
+        assertThat(ultimaTraza(creado.id()).getIp()).isNotBlank().isNotEqualTo("198.51.100.24");
     }
 
     @Test
-    void descargar_sinIpCloudflare_registraPrimeraIpDeForwardedFor() {
+    void descargar_enModoDirecto_ignoraForwardedForNoConfiable() {
         RecursoResponse creado = crearRecursoDescargable();
 
         descargarConHeaders(creado.id(), null, "198.51.100.25, 203.0.113.8");
 
-        assertThat(ultimaTraza(creado.id()).getIp()).isEqualTo("198.51.100.25");
+        assertThat(ultimaTraza(creado.id()).getIp()).isNotBlank().isNotEqualTo("198.51.100.25");
     }
 
     @Test

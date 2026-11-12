@@ -216,6 +216,24 @@ class UsuarioControllerIT extends IntegrationTestBase {
     }
 
     @Test
+    void cambiarContrasena_revocaTokenAnteriorYPermiteNuevaSesion() {
+        UUID usuarioId = crearEstudianteParaTests();
+        String tokenAnterior = login("estudiante.estado.it@kellyacademy.com", PASSWORD);
+        ResponseEntity<Void> cambio = patch("/api/usuarios/" + usuarioId + "/contrasena",
+                tokenAnterior, new CambiarContrasenaRequest(PASSWORD, "NuevaPass123"), Void.class);
+        assertThat(cambio.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        ResponseEntity<String> anterior = rest.exchange("/api/usuarios/me", HttpMethod.GET,
+                new HttpEntity<>(headersConToken(tokenAnterior)), String.class);
+        assertThat(anterior.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        String nuevo = login("estudiante.estado.it@kellyacademy.com", "NuevaPass123");
+        ResponseEntity<UsuarioResponse> actual = rest.exchange("/api/usuarios/me", HttpMethod.GET,
+                new HttpEntity<>(headersConToken(nuevo)), UsuarioResponse.class);
+        assertThat(actual.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(actual.getBody().id()).isEqualTo(usuarioId);
+    }
+
+    @Test
     void cambiarContrasena_actualIncorrecta_devuelve400() {
         UUID usuarioId = crearEstudianteParaTests();
         String token = login("estudiante.estado.it@kellyacademy.com", PASSWORD);

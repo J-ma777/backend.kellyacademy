@@ -202,6 +202,9 @@ public class TutoriaService {
 
         // Slice #47 + #48: al confirmar, revalidar disponibilidad y no solape.
         if (nuevoEstado == EstadoTutoria.CONFIRMADA) {
+            // Un mismo docente o estudiante solo puede confirmar un horario a la vez.
+            // Orden fijo para evitar interbloqueos cuando se comparten participantes.
+            bloquearParticipantes(tutoria.getDocente().getId(), tutoria.getEstudiante().getId());
             validarCruceMedianoche(tutoria.getFecha(), tutoria.getDuracionMinutos());
             validarDisponibilidadDocente(tutoria.getFecha(), tutoria.getDuracionMinutos(), tutoria.getDocente().getId());
             validarNoSolapeTutoria(tutoria.getFecha(), tutoria.getDuracionMinutos(),
@@ -214,6 +217,12 @@ public class TutoriaService {
         Tutoria cargada = tutoriaRepository.findWithEstudianteDocenteCursoById(guardada.getId())
                 .orElseThrow(() -> new IllegalStateException("Tutoria actualizada no encontrada"));
         return tutoriaMapper.toResponse(cargada);
+    }
+
+    private void bloquearParticipantes(UUID docenteId, UUID estudianteId) {
+        java.util.stream.Stream.of(docenteId, estudianteId).distinct().sorted()
+                .forEach(id -> usuarioRepository.findByIdForUpdate(id)
+                        .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", id)));
     }
 
     // Maquina de estados:
@@ -410,7 +419,7 @@ public class TutoriaService {
 
     // Si la tutoria se vincula a un curso:
     //   - el docente debe ser el docente dueno del curso
-    //   - el estudiante debe estar matriculado ACTIVO en el curso
+    //   - el estudiante debe tener matrícula ACTIVA o RIESGO en el curso
     private void validarPertenenciaAlCurso(Curso curso, Usuario estudiante, Usuario docente) {
         if (curso.getDocente() != null
                 && !curso.getDocente().getId().equals(docente.getId())) {
@@ -423,10 +432,11 @@ public class TutoriaService {
         Matricula matricula = matriculaRepository
                 .findByCursoIdAndEstudianteId(curso.getId(), estudiante.getId())
                 .orElse(null);
-        if (matricula == null || matricula.getEstado() != EstadoMatricula.ACTIVA) {
+        if (matricula == null || (matricula.getEstado() != EstadoMatricula.ACTIVA
+                && matricula.getEstado() != EstadoMatricula.RIESGO)) {
             throw new BusinessException(
                     "TUTORIA_FUERA_DE_CURSO",
-                    "El estudiante no esta matriculado ACTIVO en el curso referenciado."
+                    "El estudiante no está matriculado en estado ACTIVA o RIESGO en el curso referenciado."
             );
         }
     }

@@ -1,6 +1,6 @@
 # Subida de archivos con Cloudinary
 
-Las imágenes nuevas se almacenan en Cloudinary. Los documentos nuevos se almacenan en R2; véase [ARCHIVOS-R2.md](ARCHIVOS-R2.md). PostgreSQL conserva su identificador, curso, usuario que lo subió, finalidad, nombre original, MIME, tamaño, `public_id`, tipo de recurso y URL firmada en la tabla `archivos` (Flyway V19). Materiales y entregas guardan esa URL en sus campos existentes; no se almacenan binarios en la base de datos.
+Las imágenes nuevas se almacenan en Cloudinary. Los documentos nuevos se almacenan en R2; véase [ARCHIVOS-R2.md](ARCHIVOS-R2.md). PostgreSQL conserva su identificador, curso, usuario que lo subió, finalidad, nombre original, MIME, tamaño, `public_id`, tipo de recurso y referencia estable al backend en la tabla `archivos`. Materiales, anuncios y entregas guardan esa referencia en sus campos existentes; no se almacenan binarios en la base de datos.
 
 ## Activación
 
@@ -38,9 +38,11 @@ El backend arranca aunque falten credenciales; al intentar subir muestra un erro
 
 ## Acceso y ciclo de vida
 
-Los activos usan el tipo `authenticated` de Cloudinary y URLs firmadas por el backend. No se publica una URL sin firma. La aplicación comprueba la pertenencia al curso y la finalidad antes de subir; las reglas existentes controlan quién recibe los enlaces al consultar materiales o entregas.
+Las imágenes nuevas se suben con el tipo `authenticated`. La subida devuelve una referencia estable del backend, no una URL de Cloudinary. Al abrirla, el cliente llama con JWT a `/api/cursos/{cursoId}/archivos/{archivoId}/acceso`: el backend comprueba el curso, la propiedad y la publicación, y emite una URL privada de Cloudinary con caducidad de cinco minutos. Una URL temporal puede compartirse y continuará activa hasta expirar aunque se retire la matrícula.
 
-Una URL firmada es un enlace de acceso: quien la reciba puede compartirla. Las URLs guardadas no caducan automáticamente y retirar una matrícula no revoca una URL que ya se haya copiado. Para revocación individual y enlaces temporales se necesitaría un flujo de descarga autenticado adicional.
+**Imágenes históricas:** sus URLs permanentes ya guardadas en materiales, tareas, entregas o anuncios se conservan para no romper enlaces existentes y pueden seguir siendo compartidas. Este cambio no las migra ni revoca. Antes de producción se debe inventariar y migrar esas referencias con copia de seguridad y verificar con Cloudinary cómo revocar las URLs ya difundidas. Cloudinary indica que la invalidación de URLs firmadas no está habilitada por defecto. Hay una consulta de solo lectura y pasos de revisión en [INVENTARIO-IMAGENES-HISTORICAS.md](INVENTARIO-IMAGENES-HISTORICAS.md).
+
+La generación de enlaces temporales sigue el contrato `private_download_url` documentado por Cloudinary. Debe verificarse con la cuenta real y todas las políticas de entrega antes de producción; las pruebas automatizadas usan datos y proveedor simulados.
 
 Subir y guardar un material o una entrega son pasos separados. Si se cancela el formulario después de subir, el archivo y sus metadatos permanecen. No se elimina automáticamente el activo de Cloudinary al borrar un material, curso o usuario; PostgreSQL sí limpia los metadatos mediante sus claves foráneas. Esto evita eliminar archivos que puedan estar referenciados en otros recursos. La limpieza de activos huérfanos queda como una operación posterior; no está automatizada.
 
@@ -64,7 +66,7 @@ Pruebas de permisos por curso y matrícula, persistencia de metadatos, errores d
 - Todos los archivos temporales creados por estas pruebas y sus metadatos se eliminaron. No se modificaron los materiales ni las entregas existentes.
 - Se corrigió `.gitignore`: `storage/` ignoraba accidentalmente el paquete Java y sus pruebas. `/storage/` limita la exclusión a los archivos locales de la raíz y permite versionar el código de integración. `.env` sigue excluido.
 
-Las pruebas automatizadas previas cubren permisos, persistencia, formatos y firmas. La verificación de esta fecha comprueba la cuenta y el backend reales; no incluye revisión visual del navegador.
+Las pruebas y la verificación de esta fecha corresponden al flujo anterior de URL firmada permanente. No validan el nuevo flujo temporal de cinco minutos, que requiere una nueva comprobación contra la cuenta real y el navegador.
 
 ### Recomendación para documentos
 

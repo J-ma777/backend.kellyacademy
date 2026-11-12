@@ -246,7 +246,7 @@ class UsuarioServiceTest {
                     assertThat(ex.getMessage()).contains("no puede eliminar su propia cuenta");
                 });
 
-        verify(usuarioRepository, never()).delete(any());
+        verify(usuarioRepository, never()).delete(any(Usuario.class));
     }
 
     // ------------------------------------------------------------------
@@ -721,7 +721,7 @@ class UsuarioServiceTest {
                     assertThat(ex.getMessage()).contains("eliminar");
                 });
 
-        verify(usuarioRepository, never()).delete(any());
+        verify(usuarioRepository, never()).delete(any(Usuario.class));
     }
 
     @Test

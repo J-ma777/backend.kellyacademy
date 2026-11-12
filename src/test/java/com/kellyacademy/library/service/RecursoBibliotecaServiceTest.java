@@ -14,6 +14,7 @@ import com.kellyacademy.library.repository.RecursoDescargaRepository;
 import com.kellyacademy.security.user.CustomUserDetails;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
+import com.kellyacademy.storage.ArchivoBibliotecaService;
 import com.kellyacademy.user.entity.Usuario;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +41,7 @@ class RecursoBibliotecaServiceTest {
     @Mock private RecursoBibliotecaRepository recursoRepository;
     @Mock private RecursoDescargaRepository recursoDescargaRepository;
     @Mock private RecursoBibliotecaMapper recursoMapper;
+    @Mock private ArchivoBibliotecaService archivosBiblioteca;
 
     @InjectMocks private RecursoBibliotecaService recursoService;
 
@@ -296,6 +298,7 @@ class RecursoBibliotecaServiceTest {
 
         when(recursoRepository.incrementarContadorDescargas(recursoId)).thenReturn(1);
         when(recursoRepository.findById(recursoId)).thenReturn(Optional.of(recurso));
+        when(archivosBiblioteca.urlDescarga(recurso.getUrlArchivo())).thenReturn(recurso.getUrlArchivo());
 
         DescargaRecursoResponse resp = recursoService.descargar(recursoId, "203.0.113.10");
 

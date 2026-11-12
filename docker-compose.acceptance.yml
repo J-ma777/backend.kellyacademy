@@ -1,0 +1,79 @@
+# Entorno aislado para pruebas de aceptación: no utiliza la base ni los volúmenes de desarrollo.
+# Iniciar: docker compose -f docker-compose.acceptance.yml up -d --build
+# Finalizar y descartar datos temporales: docker compose -f docker-compose.acceptance.yml down
+name: kelly-acceptance
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: kelly_acceptance
+      POSTGRES_USER: acceptance
+      POSTGRES_PASSWORD: acceptance-only
+      PGDATA: /var/lib/postgresql/data/pgdata
+    # La imagen PostgreSQL 18 usa /var/lib/postgresql como volumen. Montar el
+    # tmpfs allí evita crear un volumen persistente y aísla todos los datos.
+    tmpfs:
+      - /var/lib/postgresql
+    networks:
+      - database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acceptance -d kelly_acceptance"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/kelly_acceptance
+      DB_USERNAME: acceptance
+      DB_PASSWORD: acceptance-only
+      JWT_SECRET: VGhpc0lzQVRlc3RTZWNyZXRLZXlGb3JLZWxseUFjYWRlbXlMTVNCYWNrZW5kMjAyNlRlc3RpbmdPbmx5
+      JWT_EXPIRATION: "3600000"
+      APP_PUBLIC_URL: http://127.0.0.1:18080
+      APP_CORS_ALLOWED_ORIGINS: http://127.0.0.1:14200
+      APP_CLIENT_IP_MODE: direct
+      DOCUMENT_CONVERTER_URL: ""
+      CLOUDINARY_CLOUD_NAME: ""
+      CLOUDINARY_API_KEY: ""
+      CLOUDINARY_API_SECRET: ""
+      R2_ENDPOINT: ""
+      R2_ACCESS_KEY_ID: ""
+      R2_SECRET_ACCESS_KEY: ""
+      R2_BUCKET: ""
+      R2_REGION: auto
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - database
+
+  proxy:
+    # Reutiliza la imagen PostgreSQL que ya necesita la suite; BusyBox incluye nc.
+    image: postgres:18-alpine
+    entrypoint: ["/bin/sh", "/opt/acceptance/relay.sh"]
+    ports:
+      - "127.0.0.1:18080:8080"
+    volumes:
+      - ./acceptance/relay.sh:/opt/acceptance/relay.sh:ro
+    # La imagen declara este volumen incluso si solo se utiliza BusyBox.
+    tmpfs:
+      - /var/lib/postgresql
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - database
+      - access
+
+# La base y el backend solo tienen acceso a la red privada. El proxy publica
+# el backend en localhost y conecta esa red con la red de acceso del host.
+networks:
+  database:
+    internal: true
+  access:

@@ -9,6 +9,11 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import javax.crypto.Mac;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,6 +23,7 @@ import java.util.function.Function;
 @RequiredArgsConstructor
 public class JwtService {
 
+    private static final String CREDENTIAL_VERSION_CLAIM = "credential_version";
     private final JwtProperties jwtProperties;
 
     public String generarToken(UserDetails userDetails) {
@@ -42,6 +48,8 @@ public class JwtService {
 
         return Jwts.builder()
                 .claims(extraClaims)
+                // The password itself and its stored hash are never embedded in the JWT.
+                .claim(CREDENTIAL_VERSION_CLAIM, credentialVersion(userDetails))
                 .subject(userDetails.getUsername())
                 .issuedAt(fechaActual)
                 .expiration(fechaExpiracion)
@@ -77,9 +85,31 @@ public class JwtService {
         String username =
                 extraerNombreUsuario(token);
 
-        return username.equals(
-                userDetails.getUsername()
-        ) && !estaExpirado(token);
+        String version = extraerClaim(token, claims -> claims.get(CREDENTIAL_VERSION_CLAIM, String.class));
+        String currentVersion = credentialVersion(userDetails);
+        return username.equals(userDetails.getUsername())
+                && !estaExpirado(token)
+                && version != null
+                && MessageDigest.isEqual(version.getBytes(StandardCharsets.UTF_8),
+                        currentVersion.getBytes(StandardCharsets.UTF_8));
+    }
+
+    // An HMAC of the persisted password hash changes on password reset without
+    // disclosing the hash or requiring a schema change. Legacy tokens without
+    // this claim are rejected, so deployment requires users to log in again.
+    private String credentialVersion(UserDetails userDetails) {
+        if (userDetails.getPassword() == null) {
+            throw new IllegalArgumentException("No se puede generar una sesion sin credenciales");
+        }
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(obtenerClave());
+            byte[] input = ("kellyacademy:credential-version:" + userDetails.getPassword())
+                    .getBytes(StandardCharsets.UTF_8);
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(input));
+        } catch (GeneralSecurityException ex) {
+            throw new IllegalStateException("No se pudo validar la version de credenciales", ex);
+        }
     }
 
     private boolean estaExpirado(

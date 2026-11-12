@@ -241,6 +241,78 @@
 		</plugins>
 	</build>
 	<profiles>
+        <!-- Los ControllerIT existentes, con PostgreSQL efímero y migraciones reales. -->
+        <profile>
+            <id>postgres-suite</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.testcontainers</groupId>
+                    <artifactId>testcontainers-postgresql</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <directory>${project.basedir}/target-postgres-suite</directory>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes combine.self="override"><include>**/*ControllerIT.java</include></includes>
+                            <systemPropertyVariables>
+                                <kelly.tests.expect-postgres>true</kelly.tests.expect-postgres>
+                                <spring.datasource.url>jdbc:tc:postgresql:18-alpine:///kellyacademy?TC_DAEMON=true</spring.datasource.url>
+                                <spring.datasource.driver-class-name>org.testcontainers.jdbc.ContainerDatabaseDriver</spring.datasource.driver-class-name>
+                                <spring.datasource.username>test</spring.datasource.username>
+                                <spring.datasource.password>test</spring.datasource.password>
+                                <spring.flyway.enabled>true</spring.flyway.enabled>
+                                <spring.flyway.url>jdbc:tc:postgresql:18-alpine:///kellyacademy?TC_DAEMON=true</spring.flyway.url>
+                                <spring.flyway.user>test</spring.flyway.user>
+                                <spring.flyway.password>test</spring.flyway.password>
+                                <spring.jpa.hibernate.ddl-auto>validate</spring.jpa.hibernate.ddl-auto>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- Opción aislada: comprueba migraciones reales sin alterar la suite H2. -->
+        <profile>
+            <id>postgres-it</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.testcontainers</groupId>
+                    <artifactId>testcontainers-postgresql</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <directory>${project.basedir}/target-postgres-it</directory>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>postgres-test-source</id>
+                                <phase>generate-test-sources</phase>
+                                <goals><goal>add-test-source</goal></goals>
+                                <configuration>
+                                    <sources><source>src/postgres-test/java</source></sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes combine.self="override"><include>**/*PostgresIT.java</include></includes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
 		<profile>
 			<id>evidencia</id>
 			<build>

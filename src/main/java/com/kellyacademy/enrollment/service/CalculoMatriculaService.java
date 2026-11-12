@@ -27,7 +27,6 @@ public class CalculoMatriculaService {
 
     private static final String RECURSO_MATRICULA = "Matricula";
     private static final BigDecimal CIEN = BigDecimal.valueOf(100);
-    private static final BigDecimal PESO_TARDE = new BigDecimal("0.5");
 
     private final MatriculaRepository matriculaRepository;
     private final EntregaRepository entregaRepository;
@@ -97,27 +96,16 @@ public class CalculoMatriculaService {
         long totalClasesDictadas = claseRepository.contarClasesDictadasPorCurso(cursoId, ahora);
 
         long presentes = asistenciaRepository.contarPorCursoEstudianteYEstado(
-                cursoId, estudianteId, EstadoAsistencia.PRESENTE
+                cursoId, estudianteId, EstadoAsistencia.PRESENTE, ahora
         );
         long tardes = asistenciaRepository.contarPorCursoEstudianteYEstado(
-                cursoId, estudianteId, EstadoAsistencia.TARDE
+                cursoId, estudianteId, EstadoAsistencia.TARDE, ahora
         );
         long justificados = asistenciaRepository.contarPorCursoEstudianteYEstado(
-                cursoId, estudianteId, EstadoAsistencia.JUSTIFICADO
+                cursoId, estudianteId, EstadoAsistencia.JUSTIFICADO, ahora
         );
 
-        long denominador = totalClasesDictadas - justificados;
-        if (denominador <= 0) {
-            return null;
-        }
-
-        BigDecimal numPresentes = BigDecimal.valueOf(presentes);
-        BigDecimal numTardes = BigDecimal.valueOf(tardes).multiply(PESO_TARDE);
-        BigDecimal numerador = numPresentes.add(numTardes);
-
-        return numerador
-                .multiply(CIEN)
-                .divide(BigDecimal.valueOf(denominador), 2, RoundingMode.HALF_UP);
+        return CalculoAsistencia.porcentaje(totalClasesDictadas, presentes, tardes, justificados);
     }
 }
 

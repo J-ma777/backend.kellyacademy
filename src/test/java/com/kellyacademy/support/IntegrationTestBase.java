@@ -36,6 +36,7 @@ import jakarta.persistence.metamodel.EntityType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.resttestclient.TestRestTemplate;
@@ -95,6 +96,8 @@ public abstract class IntegrationTestBase {
     @Autowired protected RecursoBibliotecaRepository recursoBibliotecaRepository;
 
     @Autowired private EntityManagerFactory entityManagerFactory;
+    @Value("${spring.datasource.url}") private String testDatasourceUrl;
+    @Value("${spring.datasource.driver-class-name}") private String testDatasourceDriver;
 
     // IDs y tokens utiles para los tests hijos.
     protected UUID adminId;
@@ -204,6 +207,23 @@ public abstract class IntegrationTestBase {
     // ------------------------------------------------------------------------
 
     protected String login(String correo, String contrasena) {
+        String token = loginSinAceptar(correo, contrasena);
+        var estado = get("/api/terminos/aceptacion", token, com.kellyacademy.security.terms.TerminosService.Estado.class);
+        if (estado.getBody() == null) throw new IllegalStateException("No se pudo leer el estado de términos de la prueba");
+        ResponseEntity<Void> aceptacion = rest.exchange(
+                "/api/terminos/aceptacion", HttpMethod.POST,
+                new HttpEntity<>(java.util.Map.of("version", com.kellyacademy.security.terms.TerminosService.VERSION,
+                        "rolesMostrados", estado.getBody().roles()), headersConToken(token)),
+                Void.class
+        );
+        if (!aceptacion.getStatusCode().is2xxSuccessful()) {
+            throw new IllegalStateException("No se pudo preparar la aceptación de términos de la prueba");
+        }
+        return token;
+    }
+
+    /** Para comprobar el flujo previo a la aceptación sin el fixture habitual. */
+    protected String loginSinAceptar(String correo, String contrasena) {
         AuthRequest req = new AuthRequest();
         req.setCorreoElectronico(correo);
         req.setContrasena(contrasena);
@@ -345,16 +365,34 @@ public abstract class IntegrationTestBase {
         try {
             em.getTransaction().begin();
 
-            // H2 no soporta TRUNCATE ... CASCADE. Se desactivan las FKs temporalmente
-            // para poder truncar en cualquier orden, y se restauran al final.
-            em.createNativeQuery("SET REFERENTIAL_INTEGRITY FALSE").executeUpdate();
-
             Set<String> tablas = descubrirTablasDeNegocio();
-            for (String tabla : tablas) {
-                em.createNativeQuery("TRUNCATE TABLE " + tabla).executeUpdate();
+            String motor = em.unwrap(org.hibernate.Session.class)
+                    .doReturningWork(c -> c.getMetaData().getDatabaseProductName());
+            boolean perfilPostgres = Boolean.getBoolean("kelly.tests.expect-postgres");
+            if (perfilPostgres && !"PostgreSQL".equals(motor)) {
+                throw new IllegalStateException("El perfil postgres-suite exige PostgreSQL, pero recibió " + motor);
             }
-
-            em.createNativeQuery("SET REFERENTIAL_INTEGRITY TRUE").executeUpdate();
+            TestDatabaseCleanupGuard.verify(motor, testDatasourceUrl, testDatasourceDriver, perfilPostgres);
+            if ("PostgreSQL".equals(motor)) {
+                if (Boolean.getBoolean("kelly.tests.expect-postgres")) {
+                    Number migraciones = (Number) em.createNativeQuery(
+                            "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true").getSingleResult();
+                    if (migraciones.longValue() == 0) {
+                        throw new IllegalStateException("No se aplicaron migraciones Flyway a la base de pruebas");
+                    }
+                }
+                // CASCADE incluye también las tablas de unión no representadas como entidades.
+                em.createNativeQuery("TRUNCATE TABLE " + String.join(", ", tablas) + " CASCADE").executeUpdate();
+            } else if ("H2".equals(motor)) {
+                // H2 no admite TRUNCATE ... CASCADE; restaurar la integridad al terminar.
+                em.createNativeQuery("SET REFERENTIAL_INTEGRITY FALSE").executeUpdate();
+                for (String tabla : tablas) {
+                    em.createNativeQuery("TRUNCATE TABLE " + tabla).executeUpdate();
+                }
+                em.createNativeQuery("SET REFERENTIAL_INTEGRITY TRUE").executeUpdate();
+            } else {
+                throw new IllegalStateException("Motor no admitido para limpiar pruebas: " + motor);
+            }
 
             em.getTransaction().commit();
         } catch (RuntimeException ex) {

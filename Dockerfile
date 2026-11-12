@@ -25,6 +25,10 @@ USER spring:spring
 
 WORKDIR /app
 
+# El contenedor usa el perfil seguro salvo que el entorno lo sobrescriba.
+# docker-compose establece explícitamente dev para desarrollo local.
+ENV SPRING_PROFILES_ACTIVE=prod
+
 # JAR renombrado para ENTRYPOINT estable
 COPY --from=build --chown=spring:spring /workspace/app.jar app.jar
 

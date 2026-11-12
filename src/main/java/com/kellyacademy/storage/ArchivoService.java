@@ -43,13 +43,13 @@ public class ArchivoService {
         if(image){
             var uploaded=cloudinary.upload(data,extension,mime,cursoId);
             entity.setProveedor("CLOUDINARY");entity.setPublicId(uploaded.publicId());
-            entity.setResourceType(uploaded.resourceType());entity.setUrl(uploaded.url());
+            entity.setResourceType(uploaded.resourceType());entity.setUrl("pendiente");
         }else{
             entity.setProveedor("R2");entity.setPublicId(r2.upload(data,extension,mime,cursoId));
             entity.setResourceType("raw");entity.setUrl("pendiente");
         }
         archivos.save(entity);
-        if(!image)entity.setUrl(publicUrl.replaceAll("/$", "")+"/api/cursos/"+cursoId+"/archivos/"+entity.getId());
+        entity.setUrl(publicUrl.replaceAll("/$", "")+"/api/cursos/"+cursoId+"/archivos/"+entity.getId());
         return new Resultado(entity.getId(),name,mime,data.length,entity.getUrl());
     }
     static String validar(byte[] b,String extension) {

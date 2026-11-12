@@ -3,6 +3,8 @@ package com.kellyacademy.course.service;
 import com.kellyacademy.course.entity.*;
 import com.kellyacademy.course.repository.*;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
+import com.kellyacademy.enrollment.service.CalculoMatriculaService;
+import com.kellyacademy.enrollment.service.MatriculaEstadoService;
 import com.kellyacademy.enrollment.enums.EstadoMatricula;
 import com.kellyacademy.storage.ArchivoAccesoService;
 import com.kellyacademy.user.repository.UsuarioRepository;
@@ -24,8 +26,14 @@ class ContenidoCursoServiceTest {
     @Mock AccesoCursoService acceso; @Mock ArchivoAccesoService archivos;
     @Mock SemanaRepository semanas; @Mock MaterialRepository materiales; @Mock ClaseRepository clases; @Mock TareaRepository tareas;
     @Mock MaterialService materialService; @Mock ClaseService claseService; @Mock TareaService tareaService;
+    @Mock CalculoMatriculaService calculoMatriculaService;
     @Mock ProgresoContenidoRepository progresos; @Mock UsuarioRepository usuarios; @Mock MatriculaRepository matriculas; @Mock Validator validator;
-    @InjectMocks ContenidoCursoService service;
+    ContenidoCursoService service;
+    @BeforeEach void inicializar() {
+        service = new ContenidoCursoService(acceso, archivos, semanas, materiales, clases, tareas,
+                materialService, claseService, tareaService, progresos, usuarios, matriculas,
+                new MatriculaEstadoService(calculoMatriculaService), validator);
+    }
     @AfterEach void cleanup() { SecurityContextHolder.clearContext(); }
     private Material material() {
         var m = new Material(); m.setId(UUID.randomUUID()); m.setSemana(TestData.tarea(TestData.curso(TestData.usuario("DOCENTE"))).getSemana());
@@ -60,10 +68,23 @@ class ContenidoCursoServiceTest {
         assertThatThrownBy(() -> service.completar(task.getSemana().getUnidad().getCurso().getId(), "TASK", task.getId())).isInstanceOf(BusinessException.class).hasMessageContaining("entrega");
         verifyNoInteractions(progresos);
     }
+    @Test void retirarMatriculaActivaCalculaInstantaneaAntesDeCambiarEstado() {
+        var alumno = TestData.usuario("ESTUDIANTE"); var curso = TestData.curso(TestData.usuario("DOCENTE"));
+        var m = TestData.matricula(curso, alumno, EstadoMatricula.RIESGO);
+        when(acceso.obtener(curso.getId())).thenReturn(curso);
+        when(matriculas.findByCursoIdAndEstudianteIdForUpdate(curso.getId(), alumno.getId())).thenReturn(Optional.of(m));
+        doAnswer(inv -> { assertThat(m.getEstado()).isEqualTo(EstadoMatricula.RIESGO); return null; })
+                .when(calculoMatriculaService).recalcular(m.getId());
+        service.retirarAlumno(curso.getId(), alumno.getId());
+        assertThat(m.getEstado()).isEqualTo(EstadoMatricula.ABANDONADA);
+        verify(calculoMatriculaService).recalcular(m.getId());
+        service.retirarAlumno(curso.getId(), alumno.getId());
+        verify(calculoMatriculaService, times(1)).recalcular(m.getId());
+    }
     @Test void matriculaCompletadaConservaSuHistorialAlIntentarRetirarla() {
         var alumno = TestData.usuario("ESTUDIANTE"); var curso = TestData.curso(TestData.usuario("DOCENTE"));
         var m = TestData.matricula(curso, alumno, EstadoMatricula.COMPLETADA);
-        when(acceso.obtener(curso.getId())).thenReturn(curso); when(matriculas.findByCursoIdAndEstudianteId(curso.getId(), alumno.getId())).thenReturn(Optional.of(m));
+        when(acceso.obtener(curso.getId())).thenReturn(curso); when(matriculas.findByCursoIdAndEstudianteIdForUpdate(curso.getId(), alumno.getId())).thenReturn(Optional.of(m));
         assertThatThrownBy(() -> service.retirarAlumno(curso.getId(), alumno.getId())).isInstanceOf(BusinessException.class);
         assertThat(m.getEstado()).isEqualTo(EstadoMatricula.COMPLETADA);
     }

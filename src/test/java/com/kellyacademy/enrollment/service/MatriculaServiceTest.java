@@ -38,8 +38,9 @@ class MatriculaServiceTest {
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private MatriculaMapper matriculaMapper;
     @Mock private CalculoMatriculaService calculoMatriculaService;
+    @Mock private AsistenciaActualService asistenciaActualService;
 
-    @InjectMocks private MatriculaService matriculaService;
+    private MatriculaService matriculaService;
 
     private UUID cursoId;
     private UUID estudianteId;
@@ -48,6 +49,8 @@ class MatriculaServiceTest {
 
     @BeforeEach
     void setUp() {
+        matriculaService = new MatriculaService(matriculaRepository, cursoRepository, usuarioRepository,
+                matriculaMapper, calculoMatriculaService, new MatriculaEstadoService(calculoMatriculaService), asistenciaActualService);
         cursoId = UUID.randomUUID();
         estudianteId = UUID.randomUUID();
 
@@ -70,9 +73,9 @@ class MatriculaServiceTest {
         Matricula matriculaGuardada = new Matricula();
         matriculaGuardada.setId(UUID.randomUUID());
 
-        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(cursoRepository.findByIdForUpdate(cursoId)).thenReturn(Optional.of(curso));
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
-        when(matriculaRepository.countByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA)).thenReturn(0L);
+        when(matriculaRepository.countByCursoIdAndEstadoIn(cursoId, Set.of(EstadoMatricula.ACTIVA, EstadoMatricula.RIESGO))).thenReturn(0L);
         when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(false);
         when(matriculaMapper.toEntity(request)).thenReturn(new Matricula());
         when(matriculaRepository.save(any(Matricula.class))).thenReturn(matriculaGuardada);
@@ -89,7 +92,7 @@ class MatriculaServiceTest {
     @Test
     void crear_cuandoCursoNoExiste_lanzaResourceNotFound() {
         CrearMatriculaRequest request = new CrearMatriculaRequest(cursoId, estudianteId);
-        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.empty());
+        when(cursoRepository.findByIdForUpdate(cursoId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> matriculaService.crear(request))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -98,7 +101,7 @@ class MatriculaServiceTest {
     @Test
     void crear_cuandoEstudianteNoExiste_lanzaResourceNotFound() {
         CrearMatriculaRequest request = new CrearMatriculaRequest(cursoId, estudianteId);
-        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(cursoRepository.findByIdForUpdate(cursoId)).thenReturn(Optional.of(curso));
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> matriculaService.crear(request))
@@ -109,7 +112,7 @@ class MatriculaServiceTest {
     void crear_cuandoEstudianteSinRolEstudiante_lanzaBusinessException() {
         estudiante.setRoles(Set.of());
         CrearMatriculaRequest request = new CrearMatriculaRequest(cursoId, estudianteId);
-        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(cursoRepository.findByIdForUpdate(cursoId)).thenReturn(Optional.of(curso));
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
 
         assertThatThrownBy(() -> matriculaService.crear(request))
@@ -121,7 +124,7 @@ class MatriculaServiceTest {
     void crear_cuandoCursoNoActivo_lanzaBusinessException() {
         curso.setEstado(EstadoCurso.BORRADOR);
         CrearMatriculaRequest request = new CrearMatriculaRequest(cursoId, estudianteId);
-        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(cursoRepository.findByIdForUpdate(cursoId)).thenReturn(Optional.of(curso));
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
 
         assertThatThrownBy(() -> matriculaService.crear(request))
@@ -133,9 +136,9 @@ class MatriculaServiceTest {
     void crear_cuandoCursoSinCupo_lanzaBusinessException() {
         curso.setCapacidadMaxima(1);
         CrearMatriculaRequest request = new CrearMatriculaRequest(cursoId, estudianteId);
-        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(cursoRepository.findByIdForUpdate(cursoId)).thenReturn(Optional.of(curso));
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
-        when(matriculaRepository.countByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA)).thenReturn(1L);
+        when(matriculaRepository.countByCursoIdAndEstadoIn(cursoId, Set.of(EstadoMatricula.ACTIVA, EstadoMatricula.RIESGO))).thenReturn(1L);
 
         assertThatThrownBy(() -> matriculaService.crear(request))
                 .isInstanceOf(BusinessException.class)
@@ -145,9 +148,9 @@ class MatriculaServiceTest {
     @Test
     void crear_cuandoMatriculaDuplicada_lanzaBusinessException() {
         CrearMatriculaRequest request = new CrearMatriculaRequest(cursoId, estudianteId);
-        when(cursoRepository.findWithDocenteById(cursoId)).thenReturn(Optional.of(curso));
+        when(cursoRepository.findByIdForUpdate(cursoId)).thenReturn(Optional.of(curso));
         when(usuarioRepository.findWithRolesById(estudianteId)).thenReturn(Optional.of(estudiante));
-        when(matriculaRepository.countByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA)).thenReturn(0L);
+        when(matriculaRepository.countByCursoIdAndEstadoIn(cursoId, Set.of(EstadoMatricula.ACTIVA, EstadoMatricula.RIESGO))).thenReturn(0L);
         when(matriculaRepository.existsByCursoIdAndEstudianteId(cursoId, estudianteId)).thenReturn(true);
 
         assertThatThrownBy(() -> matriculaService.crear(request))
@@ -162,7 +165,7 @@ class MatriculaServiceTest {
     @Test
     void cambiarEstado_matriculaInexistente_lanzaResourceNotFound() {
         UUID id = UUID.randomUUID();
-        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.empty());
+        when(matriculaRepository.findByIdForUpdate(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> matriculaService.cambiarEstado(id, EstadoMatricula.COMPLETADA))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -176,7 +179,7 @@ class MatriculaServiceTest {
         m.setId(id);
         m.setEstado(EstadoMatricula.ACTIVA);
 
-        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+        when(matriculaRepository.findByIdForUpdate(id)).thenReturn(Optional.of(m));
 
         assertThatThrownBy(() -> matriculaService.cambiarEstado(id, EstadoMatricula.ACTIVA))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
@@ -192,7 +195,7 @@ class MatriculaServiceTest {
         m.setId(id);
         m.setEstado(EstadoMatricula.ACTIVA);
 
-        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+        when(matriculaRepository.findByIdForUpdate(id)).thenReturn(Optional.of(m));
         when(matriculaMapper.toResponse(m)).thenReturn(mock(MatriculaResponse.class));
 
         matriculaService.cambiarEstado(id, EstadoMatricula.COMPLETADA);
@@ -207,7 +210,7 @@ class MatriculaServiceTest {
         m.setId(id);
         m.setEstado(EstadoMatricula.ACTIVA);
 
-        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+        when(matriculaRepository.findByIdForUpdate(id)).thenReturn(Optional.of(m));
         when(matriculaMapper.toResponse(m)).thenReturn(mock(MatriculaResponse.class));
 
         matriculaService.cambiarEstado(id, EstadoMatricula.RIESGO);
@@ -222,7 +225,7 @@ class MatriculaServiceTest {
         m.setId(id);
         m.setEstado(EstadoMatricula.RIESGO);
 
-        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+        when(matriculaRepository.findByIdForUpdate(id)).thenReturn(Optional.of(m));
         when(matriculaMapper.toResponse(m)).thenReturn(mock(MatriculaResponse.class));
 
         matriculaService.cambiarEstado(id, EstadoMatricula.ACTIVA);
@@ -237,7 +240,7 @@ class MatriculaServiceTest {
         m.setId(id);
         m.setEstado(EstadoMatricula.COMPLETADA);
 
-        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+        when(matriculaRepository.findByIdForUpdate(id)).thenReturn(Optional.of(m));
 
         assertThatThrownBy(() -> matriculaService.cambiarEstado(id, EstadoMatricula.RIESGO))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
@@ -253,7 +256,7 @@ class MatriculaServiceTest {
         m.setId(id);
         m.setEstado(EstadoMatricula.ABANDONADA);
 
-        when(matriculaRepository.findWithCursoAndEstudianteById(id)).thenReturn(Optional.of(m));
+        when(matriculaRepository.findByIdForUpdate(id)).thenReturn(Optional.of(m));
 
         assertThatThrownBy(() -> matriculaService.cambiarEstado(id, EstadoMatricula.ACTIVA))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {

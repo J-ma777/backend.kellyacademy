@@ -91,6 +91,25 @@ class MensajeServiceTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
+    @Test
+    void marcarLeido_soloDestinatarioPuedeConfirmar() {
+        UUID mensajeId = UUID.randomUUID();
+        Mensaje mensaje = new Mensaje();
+        mensaje.setConversacion(conversacion);
+        mensaje.setRemitente(autenticado);
+        mensaje.setLeido(false);
+        when(mensajeRepository.findWithConversacionAndRemitenteById(mensajeId)).thenReturn(Optional.of(mensaje));
+
+        autenticarComo(autenticado);
+        assertThatThrownBy(() -> mensajeService.marcarLeido(conversacionId, mensajeId))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThat(mensaje.getLeido()).isFalse();
+
+        autenticarComo(otro);
+        mensajeService.marcarLeido(conversacionId, mensajeId);
+        assertThat(mensaje.getLeido()).isTrue();
+    }
+
     // -------- crear --------
 
     @Test

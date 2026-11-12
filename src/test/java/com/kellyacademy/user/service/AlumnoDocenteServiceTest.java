@@ -10,6 +10,8 @@ import com.kellyacademy.course.repository.CursoRepository;
 import com.kellyacademy.enrollment.entity.Matricula;
 import com.kellyacademy.enrollment.enums.EstadoMatricula;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
+import com.kellyacademy.enrollment.service.CalculoMatriculaService;
+import com.kellyacademy.enrollment.service.MatriculaEstadoService;
 import com.kellyacademy.shared.exception.*;
 import com.kellyacademy.support.TestData;
 import org.junit.jupiter.api.*;
@@ -28,9 +30,13 @@ class AlumnoDocenteServiceTest {
     @Mock UsuarioRepository usuarios;
     @Mock RolRepository roles;
     @Mock CursoRepository cursos;
-    @Mock MatriculaRepository matriculas;
+    @Mock MatriculaRepository matriculas; @Mock CalculoMatriculaService calculoMatriculaService;
     @Mock PasswordEncoder passwords;
-    @InjectMocks AlumnoDocenteService service;
+    AlumnoDocenteService service;
+    @BeforeEach void inicializar() {
+        service = new AlumnoDocenteService(usuarios, roles, cursos, matriculas, passwords,
+                new MatriculaEstadoService(calculoMatriculaService));
+    }
     private final Usuario alumno = TestData.usuario("ESTUDIANTE");
     @Test void altaNormalizaNombreCorreoYGuardaSoloPasswordCodificado() {
         when(roles.findByNombre("ESTUDIANTE")).thenReturn(Optional.of(alumno.getRoles().iterator().next()));
@@ -57,7 +63,7 @@ class AlumnoDocenteServiceTest {
         var docente = TestData.usuario("DOCENTE");
         when(usuarios.findByIdForUpdate(docente.getId())).thenReturn(Optional.of(docente));
         assertThatThrownBy(() -> service.eliminar(docente.getId())).isInstanceOf(AccessDeniedException.class);
-        verify(usuarios, never()).delete(any());
+        verify(usuarios, never()).delete(any(Usuario.class));
     }
     @Test void suspenderCuentaUsaElEstadoQueBloqueaAutenticacion() {
         when(usuarios.findByIdForUpdate(alumno.getId())).thenReturn(Optional.of(alumno));
@@ -80,17 +86,59 @@ class AlumnoDocenteServiceTest {
         service.inscribir(alumno.getId(), curso.getId());
         verify(matriculas, never()).save(any()); verify(matriculas, never()).countByCursoIdAndEstadoIn(any(), any());
     }
-    @Test void reinscribirReactivaLaMismaMatriculaAbandonada() {
-        var curso = curso(); var actual = TestData.matricula(curso, alumno, EstadoMatricula.ABANDONADA);
+    @Test void inscripcionEnRiesgoEsIdempotenteYNoEliminaSuEstado() {
+        var curso = curso(); var actual = TestData.matricula(curso, alumno, EstadoMatricula.RIESGO);
         when(matriculas.findByCursoIdAndEstudianteId(curso.getId(), alumno.getId())).thenReturn(Optional.of(actual));
         service.inscribir(alumno.getId(), curso.getId());
-        verify(matriculas).save(actual); assertThat(actual.getEstado()).isEqualTo(EstadoMatricula.ACTIVA);
+        assertThat(actual.getEstado()).isEqualTo(EstadoMatricula.RIESGO);
+        verify(matriculas, never()).save(any());
+        verify(matriculas, never()).countByCursoIdAndEstadoIn(any(), any());
+    }
+    @Test void retirarSinMatriculaEsIdempotente() {
+        var curso = TestData.curso(TestData.usuario("DOCENTE"));
+        when(usuarios.findByIdForUpdate(alumno.getId())).thenReturn(Optional.of(alumno));
+        when(cursos.existsById(curso.getId())).thenReturn(true);
+        when(matriculas.findByCursoIdAndEstudianteIdForUpdate(curso.getId(), alumno.getId())).thenReturn(Optional.empty());
+        service.retirar(alumno.getId(), curso.getId());
+        verifyNoInteractions(calculoMatriculaService);
+        verify(matriculas, never()).delete(any(Matricula.class));
+    }
+    @Test void reinscribirUnaMatriculaTerminalSeRechazaSinAlterarHistorial() {
+        var curso = curso(); var actual = TestData.matricula(curso, alumno, EstadoMatricula.ABANDONADA);
+        actual.setNotaFinal(new java.math.BigDecimal("93.00"));
+        when(matriculas.findByCursoIdAndEstudianteId(curso.getId(), alumno.getId())).thenReturn(Optional.of(actual));
+        for (EstadoMatricula terminal : List.of(EstadoMatricula.ABANDONADA, EstadoMatricula.COMPLETADA)) {
+            actual.setEstado(terminal);
+            assertThatThrownBy(() -> service.inscribir(alumno.getId(), curso.getId()))
+                    .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getCodigo()).isEqualTo("MATRICULA_TERMINAL"));
+            assertThat(actual.getEstado()).isEqualTo(terminal);
+            assertThat(actual.getNotaFinal()).isEqualByComparingTo("93.00");
+        }
+        verify(matriculas, never()).save(any());
+        verify(matriculas, never()).countByCursoIdAndEstadoIn(any(), any());
+    }
+    @Test void retirarCompletadaSeRechazaYRetirarAbandonadaEsIdempotente() {
+        var curso = TestData.curso(TestData.usuario("DOCENTE"));
+        var actual = TestData.matricula(curso, alumno, EstadoMatricula.COMPLETADA);
+        actual.setNotaFinal(new java.math.BigDecimal("90.00"));
+        when(usuarios.findByIdForUpdate(alumno.getId())).thenReturn(Optional.of(alumno));
+        when(cursos.existsById(curso.getId())).thenReturn(true);
+        when(matriculas.findByCursoIdAndEstudianteIdForUpdate(curso.getId(), alumno.getId())).thenReturn(Optional.of(actual));
+        assertThatThrownBy(() -> service.retirar(alumno.getId(), curso.getId()))
+                .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getCodigo()).isEqualTo("MATRICULA_TERMINAL"));
+        assertThat(actual.getEstado()).isEqualTo(EstadoMatricula.COMPLETADA);
+        actual.setEstado(EstadoMatricula.ABANDONADA);
+        service.retirar(alumno.getId(), curso.getId());
+        assertThat(actual.getEstado()).isEqualTo(EstadoMatricula.ABANDONADA);
+        assertThat(actual.getNotaFinal()).isEqualByComparingTo("90.00");
+        verifyNoInteractions(calculoMatriculaService);
     }
     @Test void retirarConservaLaMatriculaComoAbandonada() {
         var curso = TestData.curso(TestData.usuario("DOCENTE")); var actual = TestData.matricula(curso, alumno, EstadoMatricula.ACTIVA);
         when(usuarios.findByIdForUpdate(alumno.getId())).thenReturn(Optional.of(alumno)); when(cursos.existsById(curso.getId())).thenReturn(true);
-        when(matriculas.findByCursoIdAndEstudianteId(curso.getId(), alumno.getId())).thenReturn(Optional.of(actual));
+        when(matriculas.findByCursoIdAndEstudianteIdForUpdate(curso.getId(), alumno.getId())).thenReturn(Optional.of(actual));
         service.retirar(alumno.getId(), curso.getId()); assertThat(actual.getEstado()).isEqualTo(EstadoMatricula.ABANDONADA);
+        verify(calculoMatriculaService).recalcular(actual.getId());
         verify(matriculas, never()).delete(any(Matricula.class));
     }
 }

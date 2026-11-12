@@ -142,7 +142,10 @@ public class MensajeService {
             throw new ResourceNotFoundException("Mensaje", "id", mensajeId);
         }
 
-        validarParticipanteOAdmin(mensaje.getConversacion());
+        validarParticipante(mensaje.getConversacion());
+        if (mensaje.getRemitente().getId().equals(SecurityUtils.getUsuarioAutenticadoId())) {
+            throw new AccessDeniedException("Solo el destinatario puede marcar el mensaje como leído.");
+        }
 
         // Idempotente.
         if (!Boolean.TRUE.equals(mensaje.getLeido())) {

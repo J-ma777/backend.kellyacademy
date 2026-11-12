@@ -152,3 +152,6 @@ HELP.md
 # Documentacion local (no se versiona)
 # -----------------------------------------
 ENDPOINTS.md
+
+/target-postgres-it/
+/target-postgres-suite/

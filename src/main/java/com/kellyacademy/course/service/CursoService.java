@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.springframework.data.jpa.domain.Specification.allOf;
@@ -130,11 +131,18 @@ public class CursoService {
 
     public CursoResponse actualizar(UUID id, ActualizarCursoRequest request) {
 
-        Curso curso = cursoRepository.findWithDocenteById(id)
+        // Comparte el bloqueo con la reserva de cupos de ambos endpoints.
+        Curso curso = cursoRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException(RECURSO, "id", id));
 
         validarPropietarioOAdmin(curso);
         validarFechas(request.fechaInicio(), request.fechaFin());
+        long ocupados = matriculaRepository.countByCursoIdAndEstadoIn(id,
+                Set.of(EstadoMatricula.ACTIVA, EstadoMatricula.RIESGO));
+        if (request.capacidadMaxima() < ocupados) {
+            throw new BusinessException("CAPACIDAD_INFERIOR_A_MATRICULADOS",
+                    "La capacidad no puede ser inferior al número de estudiantes matriculados");
+        }
 
         String resumenAnterior = curso.getHorario();
         cursoMapper.actualizarDesdeRequest(request, curso);

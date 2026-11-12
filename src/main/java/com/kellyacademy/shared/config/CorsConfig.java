@@ -36,7 +36,7 @@ public class CorsConfig {
         );
 
         configuration.setExposedHeaders(
-                List.of("Authorization", "Content-Disposition")
+                List.of("Authorization", "Content-Disposition", "Retry-After")
         );
 
         configuration.setAllowCredentials(true);

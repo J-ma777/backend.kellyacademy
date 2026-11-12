@@ -8,6 +8,7 @@ import com.kellyacademy.course.enums.EstadoCurso;
 import com.kellyacademy.course.repository.CursoRepository;
 import com.kellyacademy.enrollment.enums.EstadoMatricula;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
+import com.kellyacademy.enrollment.service.MatriculaEstadoService;
 import com.kellyacademy.shared.config.AppTime;
 import com.kellyacademy.shared.exception.*;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class AlumnoDocenteService {
     private final CursoRepository cursos;
     private final MatriculaRepository matriculas;
     private final PasswordEncoder passwords;
+    private final MatriculaEstadoService matriculaEstadoService;
     private static final Set<EstadoMatricula> OCUPAN_CUPO = Set.of(EstadoMatricula.ACTIVA, EstadoMatricula.RIESGO);
 
     @Transactional(readOnly=true)
@@ -81,21 +83,25 @@ public class AlumnoDocenteService {
         Usuario u = alumno(id);
         var curso = cursos.findByIdForUpdate(cursoId).orElseThrow(() -> new ResourceNotFoundException("Curso","id",cursoId));
         var actual = matriculas.findByCursoIdAndEstudianteId(cursoId,id).orElse(null);
-        if(actual != null && actual.getEstado()!=EstadoMatricula.ABANDONADA) return;
+        if (actual != null) {
+            if (OCUPAN_CUPO.contains(actual.getEstado())) return; // Ya está inscrito.
+            throw new BusinessException("MATRICULA_TERMINAL",
+                    "La matrícula " + actual.getEstado() + " es terminal y conserva su historial");
+        }
         if(curso.getEstado()!=EstadoCurso.ACTIVO) throw new BusinessException("CURSO_NO_ACTIVO","Solo se pueden asignar cursos activos");
         if(matriculas.countByCursoIdAndEstadoIn(cursoId,OCUPAN_CUPO)>=curso.getCapacidadMaxima())
             throw new BusinessException("CURSO_SIN_CUPO","El curso ya no tiene cupos disponibles");
-        if(actual==null) {
-            actual = new com.kellyacademy.enrollment.entity.Matricula();
-            actual.setCurso(curso); actual.setEstudiante(u); actual.setMatriculadoAt(LocalDateTime.now(AppTime.ZONA_NEGOCIO));
-        }
+        actual = new com.kellyacademy.enrollment.entity.Matricula();
+        actual.setCurso(curso); actual.setEstudiante(u); actual.setMatriculadoAt(LocalDateTime.now(AppTime.ZONA_NEGOCIO));
         actual.setEstado(EstadoMatricula.ACTIVA);
         matriculas.save(actual);
     }
     public void retirar(UUID id, UUID cursoId) {
         alumno(id);
         if(!cursos.existsById(cursoId)) throw new ResourceNotFoundException("Curso","id",cursoId);
-        matriculas.findByCursoIdAndEstudianteId(cursoId,id).ifPresent(m -> m.setEstado(EstadoMatricula.ABANDONADA));
+        matriculas.findByCursoIdAndEstudianteIdForUpdate(cursoId,id).ifPresent(m -> {
+            matriculaEstadoService.retirar(m, "MATRICULA_TERMINAL", "Una matrícula completada conserva su historial");
+        });
     }
     private Usuario alumno(UUID id) {
         Usuario u = usuarios.findByIdForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Alumno","id",id));

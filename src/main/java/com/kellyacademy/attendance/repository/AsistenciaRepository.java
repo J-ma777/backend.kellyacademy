@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.lang.Nullable;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,16 +33,40 @@ public interface AsistenciaRepository extends
 
     long countByEstudianteId(UUID estudianteId);
 
+    interface ConteoPorCursoEstudianteEstado {
+        UUID getCursoId();
+        UUID getEstudianteId();
+        EstadoAsistencia getEstado();
+        Long getTotal();
+    }
+
+    @Query("""
+        SELECT a.clase.semana.unidad.curso.id AS cursoId, a.estudiante.id AS estudianteId,
+               a.estado AS estado, COUNT(a) AS total
+        FROM Asistencia a
+        WHERE a.clase.semana.unidad.curso.id IN :cursoIds
+          AND a.estudiante.id IN :estudianteIds
+          AND a.clase.fechaHora IS NOT NULL AND a.clase.fechaHora <= :ahora
+        GROUP BY a.clase.semana.unidad.curso.id, a.estudiante.id, a.estado
+    """)
+    List<ConteoPorCursoEstudianteEstado> contarDictadasPorCursosYEstudiantes(
+            @Param("cursoIds") java.util.Collection<UUID> cursoIds,
+            @Param("estudianteIds") java.util.Collection<UUID> estudianteIds,
+            @Param("ahora") LocalDateTime ahora);
+
     @Query("""
         SELECT COUNT(a) FROM Asistencia a
         WHERE a.clase.semana.unidad.curso.id = :cursoId
           AND a.estudiante.id = :estudianteId
           AND a.estado = :estado
+          AND a.clase.fechaHora IS NOT NULL
+          AND a.clase.fechaHora <= :ahora
     """)
     long contarPorCursoEstudianteYEstado(
             @Param("cursoId") UUID cursoId,
             @Param("estudianteId") UUID estudianteId,
-            @Param("estado") EstadoAsistencia estado
+            @Param("estado") EstadoAsistencia estado,
+            @Param("ahora") LocalDateTime ahora
     );
 
     // Carga clase (con su jerarquia hasta docente) y estudiante en la misma query.

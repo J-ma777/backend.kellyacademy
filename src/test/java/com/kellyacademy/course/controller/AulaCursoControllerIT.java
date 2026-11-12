@@ -95,8 +95,17 @@ class AulaCursoControllerIT extends IntegrationTestBase {
         assertThat(panel(a,a.token()).matriculas().stream().filter(m->m.estudianteId().equals(a.alumno())).findFirst().orElseThrow().notaFinal()).isEqualByComparingTo("100");
         assertThat(panel(a,a.tokenCompanero()).matriculas().stream().filter(m->m.estudianteId().equals(a.alumno())).findFirst().orElseThrow().notaFinal()).isNull();
         assertThat(post("/api/entregas/enviar",a.token(),Map.of("tareaId",tarea.id(),"textoRespuesta","Cambio tras nota"),Object.class).getStatusCode().is4xxClientError()).isTrue();
+        assertThat(post(ruta(a)+"/contenido/CLASS",docenteDuenoToken,
+                Map.of("semanaId",a.semana(),"titulo","Clase anterior","fechaHora",LocalDateTime.now(AppTime.ZONA_NEGOCIO).minusDays(1).toString(),
+                        "duracionMinutos",30,"publicado",true,"visible",true),Object.class).getStatusCode().value()).isEqualTo(201);
+        var antesDeRetirar = matriculaRepository.findByCursoIdAndEstudianteId(a.curso(), a.alumno()).orElseThrow();
+        assertThat(antesDeRetirar.getAsistenciaPorcentaje()).isNull();
         assertThat(delete(ruta(a)+"/alumnos/"+a.alumno(),a.tokenCompanero()).getStatusCode().value()).isEqualTo(403);
         assertThat(delete(ruta(a)+"/alumnos/"+a.alumno(),docenteDuenoToken).getStatusCode().value()).isEqualTo(204);
+        var historico = matriculaRepository.findByCursoIdAndEstudianteId(a.curso(), a.alumno()).orElseThrow();
+        assertThat(historico.getEstado()).isEqualTo(com.kellyacademy.enrollment.enums.EstadoMatricula.ABANDONADA);
+        assertThat(historico.getAsistenciaPorcentaje()).isEqualByComparingTo("0.00");
+        assertThat(historico.getNotaFinal()).isEqualByComparingTo("100.00");
         assertThat(get(ruta(a)+"/aula",a.token(),Object.class).getStatusCode().value()).isEqualTo(403);
         assertThat(post("/api/entregas/enviar",a.token(),Map.of("tareaId",tarea.id(),"textoRespuesta","Tras retiro"),Object.class).getStatusCode().value()).isEqualTo(403);
         assertThat(panel(a,docenteDuenoToken).entregas()).hasSize(1);

@@ -4,6 +4,7 @@ import com.kellyacademy.calendar.service.AgendaService;
 import com.kellyacademy.course.repository.*;
 import com.kellyacademy.enrollment.repository.*;
 import com.kellyacademy.enrollment.enums.EstadoMatricula;
+import com.kellyacademy.enrollment.service.AsistenciaActualService;
 import com.kellyacademy.support.TestData;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 @ExtendWith(MockitoExtension.class)
 class DashboardServiceTest {
     @Mock MatriculaRepository matriculas; @Mock CursoRepository cursos;
+    @Mock AsistenciaActualService asistenciaActualService;
     @Mock EntregaRepository entregas; @Mock TareaRepository tareas; @Mock AgendaService agenda;
     @InjectMocks DashboardService service;
     @AfterEach void cleanup() { SecurityContextHolder.clearContext(); }
@@ -29,6 +31,7 @@ class DashboardServiceTest {
         var activo = TestData.matricula(propio, alumno, EstadoMatricula.ACTIVA); activo.setNotaFinal(new BigDecimal("85")); activo.setAsistenciaPorcentaje(new BigDecimal("90"));
         var retirado = TestData.matricula(TestData.curso(propio.getDocente()), alumno, EstadoMatricula.ABANDONADA);
         when(matriculas.findByEstudianteId(alumno.getId())).thenReturn(List.of(activo, retirado));
+        when(asistenciaActualService.calcular(List.of(activo))).thenReturn(java.util.Map.of(activo.getId(), new BigDecimal("90")));
         var result = service.obtenerResumen();
         assertThat(result.metricas().cursosInscritos()).isEqualTo(1);
         assertThat(result.metricas().promedioCalificacion()).isEqualByComparingTo("85");

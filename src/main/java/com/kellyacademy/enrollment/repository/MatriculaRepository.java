@@ -2,6 +2,8 @@ package com.kellyacademy.enrollment.repository;
 
 import com.kellyacademy.enrollment.entity.Matricula;
 import com.kellyacademy.enrollment.enums.EstadoMatricula;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -33,6 +35,16 @@ public interface MatriculaRepository extends
     long countByCursoIdAndEstadoIn(UUID cursoId, java.util.Collection<EstadoMatricula> estados);
 
     Optional<Matricula> findByCursoIdAndEstudianteId(UUID cursoId, UUID estudianteId);
+
+    // Ambos métodos comparten la misma fila bloqueada para serializar transiciones.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Matricula m WHERE m.id = :id")
+    Optional<Matricula> findByIdForUpdate(@Param("id") UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Matricula m WHERE m.curso.id = :cursoId AND m.estudiante.id = :estudianteId")
+    Optional<Matricula> findByCursoIdAndEstudianteIdForUpdate(@Param("cursoId") UUID cursoId,
+                                                              @Param("estudianteId") UUID estudianteId);
 
     boolean existsByCursoIdAndEstudianteId(UUID cursoId, UUID estudianteId);
 

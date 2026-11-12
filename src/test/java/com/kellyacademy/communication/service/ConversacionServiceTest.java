@@ -9,6 +9,9 @@ import com.kellyacademy.communication.repository.ConversacionRepository;
 import com.kellyacademy.communication.repository.MensajeRepository;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.repository.CursoRepository;
+import com.kellyacademy.course.service.AccesoCursoService;
+import com.kellyacademy.enrollment.entity.Matricula;
+import com.kellyacademy.user.enums.EstadoUsuario;
 import com.kellyacademy.enrollment.enums.EstadoMatricula;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
 import com.kellyacademy.security.user.CustomUserDetails;
@@ -29,6 +32,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -46,6 +50,7 @@ class ConversacionServiceTest {
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private MatriculaRepository matriculaRepository;
     @Mock private ConversacionMapper conversacionMapper;
+    @Mock private AccesoCursoService accesoCursoService;
 
     @InjectMocks private ConversacionService conversacionService;
 
@@ -98,6 +103,34 @@ class ConversacionServiceTest {
                 details, null, details.getAuthorities()
         );
         SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    @Test
+    void contactos_soloMiembrosActivosDelCursoYNoIncluyeAlPropioUsuario() {
+        autenticarComo(autenticado);
+        admin.setNombre("Docente"); admin.setApellido("Uno"); admin.setEstado(EstadoUsuario.ACTIVO);
+        otro.setNombre("Alumno"); otro.setApellido("Dos"); otro.setEstado(EstadoUsuario.ACTIVO);
+        Usuario inactivo = new Usuario(); inactivo.setId(UUID.randomUUID()); inactivo.setEstado(EstadoUsuario.INACTIVO);
+        Matricula propia = new Matricula(); propia.setEstudiante(autenticado); propia.setEstado(EstadoMatricula.ACTIVA);
+        Matricula enRiesgo = new Matricula(); enRiesgo.setEstudiante(otro); enRiesgo.setEstado(EstadoMatricula.RIESGO);
+        Matricula excluida = new Matricula(); excluida.setEstudiante(inactivo); excluida.setEstado(EstadoMatricula.ACTIVA);
+        when(accesoCursoService.obtener(cursoId)).thenReturn(curso);
+        when(matriculaRepository.findByCursoIdOrderByEstudianteApellidoAscEstudianteNombreAsc(cursoId))
+                .thenReturn(List.of(propia, enRiesgo, excluida));
+
+        assertThat(conversacionService.contactos(cursoId)).extracting(ConversacionService.Contacto::id)
+                .containsExactly(admin.getId(), otroId);
+        verify(accesoCursoService).validarEstudianteActivo(curso);
+    }
+
+    @Test
+    void contactos_rechazaAccesoAUsuarioSinMatriculaActiva() {
+        autenticarComo(autenticado);
+        when(accesoCursoService.obtener(cursoId)).thenReturn(curso);
+        doThrow(new AccessDeniedException("Sin matrícula activa"))
+                .when(accesoCursoService).validarEstudianteActivo(curso);
+        assertThatThrownBy(() -> conversacionService.contactos(cursoId)).isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(matriculaRepository);
     }
 
     // -------- crear --------

@@ -18,6 +18,7 @@ import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
 import com.kellyacademy.shared.util.SecurityUtils;
 import com.kellyacademy.shared.util.UrlValidator;
+import com.kellyacademy.storage.ArchivoBibliotecaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -36,6 +37,7 @@ public class RecursoBibliotecaService {
     private final RecursoBibliotecaRepository recursoRepository;
     private final RecursoDescargaRepository recursoDescargaRepository;
     private final RecursoBibliotecaMapper recursoMapper;
+    private final ArchivoBibliotecaService archivosBiblioteca;
 
     // -------- listar --------
 
@@ -74,6 +76,8 @@ public class RecursoBibliotecaService {
         validarUrlArchivo(request.urlArchivo());
         validarUrlExterno(request.urlExterno());
         validarAlMenosUnaUrl(request.urlArchivo(), request.urlExterno());
+        archivosBiblioteca.validarVinculo(request.urlArchivo(), null);
+        archivosBiblioteca.validarEnlaceExterno(request.urlExterno(), null);
 
         RecursoBiblioteca entity = recursoMapper.toEntity(request);
         entity.setContadorDescargas(0);
@@ -91,6 +95,8 @@ public class RecursoBibliotecaService {
         validarUrlArchivo(request.urlArchivo());
         validarUrlExterno(request.urlExterno());
         validarAlMenosUnaUrl(request.urlArchivo(), request.urlExterno());
+        archivosBiblioteca.validarVinculo(request.urlArchivo(), recurso.getUrlArchivo());
+        archivosBiblioteca.validarEnlaceExterno(request.urlExterno(), recurso.getUrlExterno());
 
         // El mapper ignora contadorDescargas: inmutable via PUT.
         recursoMapper.actualizarDesdeRequest(request, recurso);
@@ -122,7 +128,7 @@ public class RecursoBibliotecaService {
 
         return new DescargaRecursoResponse(
                 actualizado.getId(),
-                actualizado.getUrlArchivo(),
+                archivosBiblioteca.urlDescarga(actualizado.getUrlArchivo()),
                 actualizado.getUrlExterno(),
                 actualizado.getContadorDescargas()
         );

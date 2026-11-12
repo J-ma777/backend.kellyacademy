@@ -26,6 +26,8 @@ public interface AnuncioRepository extends
 
     List<Anuncio> findByAutorId(UUID autorId);
 
+    boolean existsByImagenUrlAndCursoIdAndActivoTrueAndPublicadoTrue(String imagenUrl, UUID cursoId);
+
     // Carga curso (con docente para autorizacion) y autor en la misma query.
     // Necesario para que AnuncioMapper.toResponse lea los escalares sin
     // disparar SELECTs adicionales (open-in-view=false).

@@ -3,6 +3,9 @@ package com.kellyacademy.security.jwt;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.userdetails.User;
 import java.util.Base64;
@@ -32,6 +35,29 @@ class JwtServiceTest {
         var service = service(3600000L);
         var other = User.withUsername("otro@it.invalid").password("irrelevante").roles("ESTUDIANTE").build();
         assertThat(service.esTokenValido(service.generarToken(user), other)).isFalse();
+    }
+    @Test void cambiarContrasenaInvalidaTokensExistentes() {
+        var service = service(3600000L);
+        String anterior = service.generarToken(user);
+        var actualizado = User.withUsername(user.getUsername()).password("nuevo-hash").roles("ESTUDIANTE").build();
+        assertThat(service.esTokenValido(anterior, actualizado)).isFalse();
+        assertThat(service.esTokenValido(service.generarToken(actualizado), actualizado)).isTrue();
+        String versionAnterior = service.extraerClaim(anterior, c -> c.get("credential_version", String.class));
+        assertThat(versionAnterior).doesNotContain(user.getPassword());
+    }
+    @Test void claimsExternosNoPuedenSustituirVersionDeCredenciales() {
+        var service = service(3600000L);
+        String token = service.generarToken(Map.of("credential_version", "falsificada"), user);
+        assertThat(service.esTokenValido(token, user)).isTrue();
+        String version = service.extraerClaim(token, c -> c.get("credential_version", String.class));
+        assertThat(version).isNotEqualTo("falsificada");
+    }
+    @Test void rechazaTokenAnteriorSinVersionDeCredenciales() {
+        var service = service(3600000L);
+        var key = Keys.hmacShaKeyFor("clave-de-pruebas-aisladas-jwt-12345678901234567890".getBytes(StandardCharsets.UTF_8));
+        String legacy = Jwts.builder().subject(user.getUsername())
+                .expiration(new Date(System.currentTimeMillis() + 3600000)).signWith(key).compact();
+        assertThat(service.esTokenValido(legacy, user)).isFalse();
     }
     @Test void rechazaTokensExpiradosSinEsperasDeReloj() {
         var service = service(-3600000L);

@@ -140,11 +140,11 @@ class CalculoMatriculaServiceTest {
         when(entregaRepository.findNotasCalificadasPorCursoYEstudiante(cursoId, estudianteId)).thenReturn(List.of());
         // 10 clases dictadas, 7 presentes, 2 tardes (ausente implicito: 1) -> num = 7 + 1.0 = 8.0, den = 10 -> 80.00%
         when(claseRepository.contarClasesDictadasPorCurso(eq(cursoId), any(LocalDateTime.class))).thenReturn(10L);
-        when(asistenciaRepository.contarPorCursoEstudianteYEstado(cursoId, estudianteId, EstadoAsistencia.PRESENTE))
+        when(asistenciaRepository.contarPorCursoEstudianteYEstado(eq(cursoId), eq(estudianteId), eq(EstadoAsistencia.PRESENTE), any(LocalDateTime.class)))
                 .thenReturn(7L);
-        when(asistenciaRepository.contarPorCursoEstudianteYEstado(cursoId, estudianteId, EstadoAsistencia.TARDE))
+        when(asistenciaRepository.contarPorCursoEstudianteYEstado(eq(cursoId), eq(estudianteId), eq(EstadoAsistencia.TARDE), any(LocalDateTime.class)))
                 .thenReturn(2L);
-        when(asistenciaRepository.contarPorCursoEstudianteYEstado(cursoId, estudianteId, EstadoAsistencia.JUSTIFICADO))
+        when(asistenciaRepository.contarPorCursoEstudianteYEstado(eq(cursoId), eq(estudianteId), eq(EstadoAsistencia.JUSTIFICADO), any(LocalDateTime.class)))
                 .thenReturn(0L);
 
         calculoMatriculaService.recalcular(matriculaId);
@@ -159,11 +159,11 @@ class CalculoMatriculaServiceTest {
         when(entregaRepository.findNotasCalificadasPorCursoYEstudiante(cursoId, estudianteId)).thenReturn(List.of());
         // 10 clases dictadas, 6 presentes, 2 tardes, 2 justificados -> num = 6 + 1.0 = 7.0, den = 10 - 2 = 8 -> 87.50%
         when(claseRepository.contarClasesDictadasPorCurso(eq(cursoId), any(LocalDateTime.class))).thenReturn(10L);
-        when(asistenciaRepository.contarPorCursoEstudianteYEstado(cursoId, estudianteId, EstadoAsistencia.PRESENTE))
+        when(asistenciaRepository.contarPorCursoEstudianteYEstado(eq(cursoId), eq(estudianteId), eq(EstadoAsistencia.PRESENTE), any(LocalDateTime.class)))
                 .thenReturn(6L);
-        when(asistenciaRepository.contarPorCursoEstudianteYEstado(cursoId, estudianteId, EstadoAsistencia.TARDE))
+        when(asistenciaRepository.contarPorCursoEstudianteYEstado(eq(cursoId), eq(estudianteId), eq(EstadoAsistencia.TARDE), any(LocalDateTime.class)))
                 .thenReturn(2L);
-        when(asistenciaRepository.contarPorCursoEstudianteYEstado(cursoId, estudianteId, EstadoAsistencia.JUSTIFICADO))
+        when(asistenciaRepository.contarPorCursoEstudianteYEstado(eq(cursoId), eq(estudianteId), eq(EstadoAsistencia.JUSTIFICADO), any(LocalDateTime.class)))
                 .thenReturn(2L);
 
         calculoMatriculaService.recalcular(matriculaId);
@@ -190,11 +190,11 @@ class CalculoMatriculaServiceTest {
         when(entregaRepository.findNotasCalificadasPorCursoYEstudiante(cursoId, estudianteId)).thenReturn(List.of());
         // 3 clases dictadas, 3 justificados -> den = 3 - 3 = 0 -> null
         when(claseRepository.contarClasesDictadasPorCurso(eq(cursoId), any(LocalDateTime.class))).thenReturn(3L);
-        when(asistenciaRepository.contarPorCursoEstudianteYEstado(cursoId, estudianteId, EstadoAsistencia.PRESENTE))
+        when(asistenciaRepository.contarPorCursoEstudianteYEstado(eq(cursoId), eq(estudianteId), eq(EstadoAsistencia.PRESENTE), any(LocalDateTime.class)))
                 .thenReturn(0L);
-        when(asistenciaRepository.contarPorCursoEstudianteYEstado(cursoId, estudianteId, EstadoAsistencia.TARDE))
+        when(asistenciaRepository.contarPorCursoEstudianteYEstado(eq(cursoId), eq(estudianteId), eq(EstadoAsistencia.TARDE), any(LocalDateTime.class)))
                 .thenReturn(0L);
-        when(asistenciaRepository.contarPorCursoEstudianteYEstado(cursoId, estudianteId, EstadoAsistencia.JUSTIFICADO))
+        when(asistenciaRepository.contarPorCursoEstudianteYEstado(eq(cursoId), eq(estudianteId), eq(EstadoAsistencia.JUSTIFICADO), any(LocalDateTime.class)))
                 .thenReturn(3L);
 
         calculoMatriculaService.recalcular(matriculaId);

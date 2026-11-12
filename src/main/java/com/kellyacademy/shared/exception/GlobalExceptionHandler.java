@@ -133,6 +133,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMensajeNoLegible(
+            org.springframework.http.converter.HttpMessageNotReadableException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Cuerpo de petición no legible en URI {}: {}", request.getRequestURI(), ex.getMessage());
+
+        ErrorResponse error = ErrorResponse.builder()
+                .codigo("VALIDATION_ERROR")
+                .mensaje("El cuerpo de la petición es inválido o contiene valores no permitidos")
+                .estado(HttpStatus.BAD_REQUEST.value())
+                .ruta(request.getRequestURI())
+                .timestamp(LocalDateTime.now(AppTime.ZONA_NEGOCIO))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
     // EXCEPCIONES DE SEGURIDAD (lanzadas en filtros)
 
     @ExceptionHandler(BadCredentialsException.class)

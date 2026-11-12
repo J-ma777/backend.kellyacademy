@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.*;
@@ -18,7 +19,7 @@ import java.util.*;
 public class CloudinaryGateway {
     private final String cloud,key,secret;
     private final RestClient client;
-    public record Uploaded(String publicId,String resourceType,String url) {}
+    public record Uploaded(String publicId,String resourceType) {}
     @org.springframework.beans.factory.annotation.Autowired
     public CloudinaryGateway(@Value("${cloudinary.cloud-name:}") String cloud,
             @Value("${cloudinary.api-key:}") String key,@Value("${cloudinary.api-secret:}") String secret) {
@@ -50,10 +51,7 @@ public class CloudinaryGateway {
             Map<?,?> response=client.post().uri("https://api.cloudinary.com/v1_1/{cloud}/{resource}/upload",cloud,resource)
                     .contentType(MediaType.MULTIPART_FORM_DATA).body(body).retrieve().body(Map.class);
             if(response==null||!id.equals(response.get("public_id"))) throw new IllegalStateException("Respuesta inválida");
-            String path=id+(resource.equals("image")?"."+response.get("format"):"");
-            String signature=Base64.getUrlEncoder().withoutPadding().encodeToString(digest(path+secret)).substring(0,8);
-            String url="https://res.cloudinary.com/"+cloud+"/"+resource+"/authenticated/s--"+signature+"--/"+path;
-            return new Uploaded(id,resource,url);
+            return new Uploaded(id,resource);
         } catch(org.springframework.web.client.RestClientResponseException ex) {
             if(ex.getStatusCode().value()==401) {
                 String message=ex.getResponseBodyAsString().contains("cloud_name mismatch")
@@ -66,6 +64,38 @@ public class CloudinaryGateway {
             // No propagar respuestas del proveedor, claves ni firmas a los logs o al navegador.
             throw new BusinessException("SUBIDA_FALLIDA","No se pudo subir el archivo a Cloudinary. Revisa la configuración y vuelve a intentarlo");
         }
+    }
+    /** Enlace de descarga de corta duración según la API privada de Cloudinary. */
+    public String downloadUrl(String publicId, String mime) {
+        return downloadUrl(publicId, mime, Instant.now());
+    }
+    String downloadUrl(String publicId, String mime, Instant ahora) {
+        if (cloud.isBlank() || key.isBlank() || secret.isBlank())
+            throw new BusinessException("CLOUDINARY_PENDIENTE", "Configura Cloudinary para acceder a la imagen");
+        String format = switch (mime) {
+            case "image/jpeg" -> "jpg";
+            case "image/png" -> "png";
+            case "image/gif" -> "gif";
+            case "image/webp" -> "webp";
+            default -> throw new BusinessException("FORMATO_NO_PERMITIDO", "La imagen no tiene un formato admitido");
+        };
+        var params = new TreeMap<String, String>();
+        params.put("attachment", "false");
+        params.put("expires_at", Long.toString(ahora.plusSeconds(300).getEpochSecond()));
+        params.put("format", format);
+        params.put("public_id", publicId);
+        params.put("timestamp", Long.toString(ahora.getEpochSecond()));
+        params.put("type", "authenticated");
+        String payload = params.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue())
+                .collect(java.util.stream.Collectors.joining("&"));
+        params.put("signature", HexFormat.of().formatHex(digest(payload + secret)));
+        params.put("api_key", key);
+        String query = params.entrySet().stream().map(e -> encode(e.getKey()) + "=" + encode(e.getValue()))
+                .collect(java.util.stream.Collectors.joining("&"));
+        return "https://api.cloudinary.com/v1_1/" + encode(cloud) + "/image/download?" + query;
+    }
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
     private static byte[] digest(String value) {
         try{return MessageDigest.getInstance("SHA-1").digest(value.getBytes(StandardCharsets.UTF_8));}

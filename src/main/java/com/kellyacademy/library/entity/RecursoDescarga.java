@@ -26,7 +26,7 @@ public class RecursoDescarga extends BaseEntity {
     @JoinColumn(name = "usuario_id")
     private Usuario usuario;
 
-    @Column(nullable = false, length = 45)
+    @Column(length = 45)
     private String ip;
 
     @Column(name = "fecha_descarga", nullable = false)

@@ -4,8 +4,8 @@ import com.kellyacademy.course.dto.request.*;
 import com.kellyacademy.course.entity.*;
 import com.kellyacademy.course.enums.TipoActividad;
 import com.kellyacademy.course.repository.*;
-import com.kellyacademy.enrollment.enums.EstadoMatricula;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
+import com.kellyacademy.enrollment.service.MatriculaEstadoService;
 import com.kellyacademy.shared.exception.*;
 import com.kellyacademy.shared.util.SecurityUtils;
 import com.kellyacademy.user.repository.UsuarioRepository;
@@ -32,6 +32,7 @@ public class ContenidoCursoService {
     private final ProgresoContenidoRepository progresoRepository;
     private final UsuarioRepository usuarioRepository;
     private final MatriculaRepository matriculaRepository;
+    private final MatriculaEstadoService matriculaEstadoService;
     private final Validator validator;
 
     public void guardar(UUID cursoId, String tipo, UUID id, GuardarContenidoRequest r) {
@@ -96,11 +97,9 @@ public class ContenidoCursoService {
     public void retirarAlumno(UUID cursoId, UUID estudianteId) {
         Curso curso = acceso.obtener(cursoId);
         acceso.validarGestor(curso);
-        var matricula = matriculaRepository.findByCursoIdAndEstudianteId(cursoId, estudianteId)
+        var matricula = matriculaRepository.findByCursoIdAndEstudianteIdForUpdate(cursoId, estudianteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Matricula", "estudianteId", estudianteId));
-        if (matricula.getEstado() == EstadoMatricula.COMPLETADA)
-            throw new BusinessException("MATRICULA_COMPLETADA", "Una matricula completada conserva su historial");
-        matricula.setEstado(EstadoMatricula.ABANDONADA);
+        matriculaEstadoService.retirar(matricula, "MATRICULA_COMPLETADA", "Una matricula completada conserva su historial");
     }
 
     private ContenidoEntity obtener(String tipo, UUID id) {

@@ -7,6 +7,7 @@ import com.kellyacademy.course.dto.response.CursoResumenResponse;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.user.entity.Usuario;
 import com.kellyacademy.user.mapper.UsuarioMapper;
+import org.mapstruct.InjectionStrategy;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -17,6 +18,7 @@ import java.util.UUID;
 
 @Mapper(
         componentModel = "spring",
+        injectionStrategy = InjectionStrategy.CONSTRUCTOR,
         unmappedTargetPolicy = ReportingPolicy.ERROR,
         uses = { UsuarioMapper.class }
 )

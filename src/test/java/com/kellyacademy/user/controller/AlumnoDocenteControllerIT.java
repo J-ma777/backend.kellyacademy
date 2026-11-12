@@ -74,7 +74,7 @@ class AlumnoDocenteControllerIT extends IntegrationTestBase {
         assertThat(get("/api/cursos/mis-cursos",token,Object.class).getStatusCode().value()).isEqualTo(401);
         assertThat(login(actual.correoElectronico(),PASSWORD)).isNotBlank();
     }
-    @Test void matriculacionMulticursoConcurrenteRetiraYReactivaConMismoHistorial() {
+    @Test void matriculacionMulticursoRetiraYRechazaReactivacionConservandoHistorial() {
         var alumno=crear("multicurso");var uno=curso(docenteDuenoId,"Curso propio",10);var dos=curso(docenteAjenoId,"Curso de otro docente",10);
         var primera=CompletableFuture.supplyAsync(()->post(BASE+"/"+alumno.id()+"/cursos",docenteDuenoToken,new Inscribir(uno.id()),Object.class));
         var segunda=CompletableFuture.supplyAsync(()->post(BASE+"/"+alumno.id()+"/cursos",docenteDuenoToken,new Inscribir(dos.id()),Object.class));
@@ -86,8 +86,24 @@ class AlumnoDocenteControllerIT extends IntegrationTestBase {
         assertThat(directorio().alumnos().getFirst().enRiesgo()).isTrue();
         assertThat(delete(BASE+"/"+alumno.id()+"/cursos/"+uno.id(),docenteDuenoToken).getStatusCode().value()).isEqualTo(204);
         assertThat(matriculaRepository.findById(matricula.getId()).orElseThrow().getEstado()).isEqualTo(EstadoMatricula.ABANDONADA);
-        assertThat(post(BASE+"/"+alumno.id()+"/cursos",docenteDuenoToken,new Inscribir(uno.id()),Object.class).getStatusCode().value()).isEqualTo(204);
-        assertThat(matriculaRepository.findByCursoIdAndEstudianteId(uno.id(),alumno.id()).orElseThrow().getId()).isEqualTo(matricula.getId());
+        assertThat(post(BASE+"/"+alumno.id()+"/cursos",docenteDuenoToken,new Inscribir(uno.id()),Object.class).getStatusCode().value()).isEqualTo(400);
+        var historico=matriculaRepository.findByCursoIdAndEstudianteId(uno.id(),alumno.id()).orElseThrow();
+        assertThat(historico.getId()).isEqualTo(matricula.getId());
+        assertThat(historico.getEstado()).isEqualTo(EstadoMatricula.ABANDONADA);
+        assertThat(delete(BASE+"/"+alumno.id()+"/cursos/"+uno.id(),docenteDuenoToken).getStatusCode().value()).isEqualTo(204);
+    }
+    @Test void transicionesConcurrentesNoSobrescribenEstadosTerminales() {
+        var alumno=crear("terminalconcurrente"); var curso=curso(docenteDuenoId,"Estado terminal",10);
+        assertThat(post(BASE+"/"+alumno.id()+"/cursos",docenteDuenoToken,new Inscribir(curso.id()),Object.class).getStatusCode().value()).isEqualTo(204);
+        var matricula=matriculaRepository.findByCursoIdAndEstudianteId(curso.id(),alumno.id()).orElseThrow();
+        var completar=CompletableFuture.supplyAsync(()->patch("/api/matriculas/"+matricula.getId()+"/estado",adminToken,Map.of("estado","COMPLETADA"),Object.class));
+        var retirar=CompletableFuture.supplyAsync(()->delete(BASE+"/"+alumno.id()+"/cursos/"+curso.id(),docenteDuenoToken));
+        int completoStatus=completar.join().getStatusCode().value();
+        int retiroStatus=retirar.join().getStatusCode().value();
+        assertThat((completoStatus == 200 && retiroStatus == 400) ||
+                (completoStatus == 400 && retiroStatus == 204)).isTrue();
+        var finalEstado=matriculaRepository.findById(matricula.getId()).orElseThrow().getEstado();
+        assertThat(finalEstado).isEqualTo(completoStatus == 200 ? EstadoMatricula.COMPLETADA : EstadoMatricula.ABANDONADA);
     }
     @Test void cuposNoSeSobreasignanConAltasConcurrentesYCursoInactivoSeRechaza() {
         var alumno=crear("cupo1");var otro=crear("cupo2");var unico=curso(docenteDuenoId,"Único cupo",1);

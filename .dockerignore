@@ -13,6 +13,8 @@
 # Build
 target/
 target-evidencia/
+target-postgres-it/
+target-postgres-suite/
 
 # Entorno / secretos
 .env

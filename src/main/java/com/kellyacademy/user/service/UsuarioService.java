@@ -18,6 +18,7 @@ import com.kellyacademy.user.enums.EstadoUsuario;
 import com.kellyacademy.user.mapper.UsuarioMapper;
 import com.kellyacademy.user.repository.RolRepository;
 import com.kellyacademy.user.repository.UsuarioRepository;
+import com.kellyacademy.user.specification.UsuarioSpecifications;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -46,8 +47,12 @@ public class UsuarioService {
 
     @Transactional(readOnly = true)
     public Page<UsuarioResumenResponse> listar(Pageable pageable) {
-        // UsuarioResumenResponse no incluye roles: no cargamos colecciones, evitamos N+1.
-        return usuarioRepository.findAll(pageable)
+        return listar(pageable, null, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<UsuarioResumenResponse> listar(Pageable pageable, String texto, EstadoUsuario estado, String rol) {
+        return usuarioRepository.findAll(UsuarioSpecifications.filtros(texto, estado, rol), pageable)
                 .map(usuarioMapper::toResumenResponse);
     }
 

@@ -15,6 +15,7 @@ import com.kellyacademy.enrollment.entity.Matricula;
 import com.kellyacademy.enrollment.enums.EstadoMatricula;
 import com.kellyacademy.enrollment.repository.EntregaRepository;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
+import com.kellyacademy.enrollment.service.AsistenciaActualService;
 import com.kellyacademy.security.user.CustomUserDetails;
 import com.kellyacademy.shared.util.SecurityUtils;
 import com.kellyacademy.user.entity.Usuario;
@@ -40,6 +41,7 @@ import com.kellyacademy.shared.config.AppTime;
 public class DashboardService {
 
     private final MatriculaRepository matriculaRepository;
+    private final AsistenciaActualService asistenciaActualService;
     private final CursoRepository cursoRepository;
     private final EntregaRepository entregaRepository;
     private final TareaRepository tareaRepository;
@@ -87,9 +89,11 @@ public class DashboardService {
         // Calculo de asistencia
         BigDecimal sumaAsistencia = BigDecimal.ZERO;
         int asistenciaContada = 0;
+        var asistenciaActual = asistenciaActualService.calcular(matriculasActivas);
         for (Matricula m : matriculasActivas) {
-            if (m.getAsistenciaPorcentaje() != null) {
-                sumaAsistencia = sumaAsistencia.add(m.getAsistenciaPorcentaje());
+            BigDecimal valor = asistenciaActual.get(m.getId());
+            if (valor != null) {
+                sumaAsistencia = sumaAsistencia.add(valor);
                 asistenciaContada++;
             }
         }

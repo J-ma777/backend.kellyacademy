@@ -11,12 +11,14 @@ import com.kellyacademy.communication.repository.MensajeRepository;
 import com.kellyacademy.communication.specification.ConversacionSpecifications;
 import com.kellyacademy.course.entity.Curso;
 import com.kellyacademy.course.repository.CursoRepository;
+import com.kellyacademy.course.service.AccesoCursoService;
 import com.kellyacademy.enrollment.enums.EstadoMatricula;
 import com.kellyacademy.enrollment.repository.MatriculaRepository;
 import com.kellyacademy.shared.exception.BusinessException;
 import com.kellyacademy.shared.exception.ResourceNotFoundException;
 import com.kellyacademy.shared.util.SecurityUtils;
 import com.kellyacademy.user.entity.Usuario;
+import com.kellyacademy.user.enums.EstadoUsuario;
 import com.kellyacademy.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -27,6 +29,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 
 @Service
@@ -40,6 +44,7 @@ public class ConversacionService {
     private final UsuarioRepository usuarioRepository;
     private final MatriculaRepository matriculaRepository;
     private final ConversacionMapper conversacionMapper;
+    private final AccesoCursoService accesoCursoService;
 
     // -------- listar --------
 
@@ -60,6 +65,27 @@ public class ConversacionService {
                             .countByConversacionIdAndRemitenteIdNotAndLeidoFalse(c.getId(), autenticadoId);
                     return conversacionMapper.toResumenResponse(c, noLeidos);
                 });
+    }
+
+    public record Contacto(UUID id, String nombreCompleto, String avatarUrl) {}
+
+    @Transactional(readOnly = true)
+    public List<Contacto> contactos(UUID cursoId) {
+        Curso curso = accesoCursoService.obtener(cursoId);
+        if (!accesoCursoService.esGestor(curso)) accesoCursoService.validarEstudianteActivo(curso);
+        UUID propio = SecurityUtils.getUsuarioAutenticadoId();
+        var contactos = new LinkedHashMap<UUID, Contacto>();
+        agregarContacto(contactos, curso.getDocente(), propio);
+        matriculaRepository.findByCursoIdOrderByEstudianteApellidoAscEstudianteNombreAsc(cursoId).stream()
+                .filter(m -> m.getEstado() == EstadoMatricula.ACTIVA || m.getEstado() == EstadoMatricula.RIESGO)
+                .forEach(m -> agregarContacto(contactos, m.getEstudiante(), propio));
+        return List.copyOf(contactos.values());
+    }
+
+    private void agregarContacto(LinkedHashMap<UUID, Contacto> contactos, Usuario u, UUID propio) {
+        if (!u.getId().equals(propio) && u.getEstado() == EstadoUsuario.ACTIVO) {
+            contactos.putIfAbsent(u.getId(), new Contacto(u.getId(), (u.getNombre() + " " + u.getApellido()).trim(), u.getAvatarUrl()));
+        }
     }
 
     // -------- obtener --------
@@ -195,7 +221,7 @@ public class ConversacionService {
         }
         boolean matriculadoActivo = matriculaRepository
                 .findByCursoIdAndEstudianteId(curso.getId(), usuario.getId())
-                .map(m -> m.getEstado() == EstadoMatricula.ACTIVA)
+                .map(m -> m.getEstado() == EstadoMatricula.ACTIVA || m.getEstado() == EstadoMatricula.RIESGO)
                 .orElse(false);
         if (!matriculadoActivo) {
             throw new BusinessException("PARTICIPANTE_NO_EN_CURSO",

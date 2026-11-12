@@ -47,8 +47,10 @@ requiere. Las respuestas ya bloqueadas se recuerdan temporalmente por instancia 
 reducir consultas repetidas a la base. Este control protege el login en la aplicación;
 no sustituye las medidas de protección del borde frente a tráfico masivo.
 
-Para el despliegue indicado, configura `APP_PUBLIC_URL=https://kelly-academy-backend.onrender.com`
-y agrega a `APP_CORS_ALLOWED_ORIGINS` el dominio exacto que Vercel proporcione.
+Para producción, configura `APP_PUBLIC_URL` con el origen HTTPS público real del backend
+y agrega a `APP_CORS_ALLOWED_ORIGINS` el origen exacto del frontend. El valor por defecto
+de `APP_PUBLIC_URL` apunta a localhost y no es adecuado para producción. Consulta la
+[guía de despliegue en Render](docs/RENDER.md) para ambos servicios y su verificación.
 Antes de publicar, comprueba que `APP_CLIENT_IP_MODE` conserve `render-public` y que
 no existan accesos por red privada o por otro proxy que puedan manipular la cabecera.
 La imagen Docker establece `SPRING_PROFILES_ACTIVE=prod` por defecto; verifica que
